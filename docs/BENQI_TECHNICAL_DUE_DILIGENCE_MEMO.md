@@ -16,8 +16,10 @@ Following our initial executive write-up for the BENQI team regarding **Avalanch
 1. **Mechanism Architecture & Dynamic Leverage:** The mint/redeem rules, collateral ratio invariants, primary/secondary tranche decompositions, and how the junior equity tranche ($\text{anAVAX}$) maintains target $2.0\times$ financial leverage as spot price evolves.
 2. **Yield Waterfall & Distribution:** The exact mathematical cash-flow accounting decomposing underlying liquid-staked AVAX ($sAVAX$) staking rewards across $\text{anBOND}$, $\text{anUSD}$, $\text{anYIELD}$, $\text{anAVAX}$, and protocol-level ACP-67 ecosystem value recirculation.
 3. **Extreme Tail-Risk Behavior (50–60% Monthly AVAX Drawdown):** The structural mechanics governing severe downside drawdowns, distinguishing continuous multi-day trend amortizations from instantaneous flash crashes via the **Theorem 1 Model-Free Crash Bound** and the Architecture $A_2$ Solvency Buffer Vault.
-4. **Comparative Positioning vs. Legacy Architectures:** A first-principles comparative evaluation contrasting anUSD against debt-auction CDPs (MakerDAO, Liquity), delta-neutral basis synthetics (Ethena), algorithmic seigniorage (Terra), and centralized fiat custodians (Tether, Circle).
-5. **Critical Open Research Frontier ($sAVAX \leftrightarrow AVAX$ Dynamics):** An explicit, transparent identification of the unmodeled dynamics governing liquid staking market microstructure, secondary de-peg slippage, unbonding queue delays, and the collaborative research required between BCRG and BENQI to rigorously parameterize these boundaries.
+4. **Comparative Positioning vs. Legacy Architectures:** A first-principles comparative evaluation grounded strictly in our historical research post-mortems on debt-auction CDPs (MakerDAO / Sky), algorithmic seigniorage (Terra), and stability-pool models (Liquity V1/V2), while clarifying the exact boundaries of our research (e.g. noting that delta-neutral synthetics like Ethena were outside our modeling scope).
+5. **Critical Open Research Frontiers:** An explicit, transparent identification of two unmodeled frontiers:
+   - The unmodeled dynamics governing liquid staking market microstructure ($sAVAX \leftrightarrow AVAX$ secondary de-peg slippage, unbonding queue delays, yield shocks).
+   - The absence of a rigorous, full-dimensional Parameter Selection Under Uncertainty (PSUU); all numerical parameters ($H_u, H_d, R, R'$) presented herein are provisional reference heuristics based on initial simplifying assumptions that require joint calibration with BENQI.
 
 ---
 
@@ -40,10 +42,14 @@ In strict adherence to the BCRG Systems Engineering Standard, all technical disc
 | - Stage 4 cadCAD digital twin (500 Kou jump paths x 365 days; 0.00% haircut probability).         |
 | - Architecture A_2 Solvency Buffer Vault down-selection.                                          |
 |                                                                                                   |
-| [TIER 3: PROVISIONAL RESEARCH FRONTIER — ACTIVE COLLABORATION SCOPE]                              |
-| - Dynamic sAVAX <-> AVAX de-peg correlation and secondary market liquidity depth under stress.   |
-| - Unstaking latency queues (14-day lockup unwinding) during emergency redemption runs.           |
-| - Parameter Selection Under Uncertainty (PSUU) for BENQI-specific pool risk caps.                |
+| [TIER 3: PROVISIONAL RESEARCH FRONTIERS — OPEN COLLABORATION SCOPE]                               |
+| - Parameter Selection Under Uncertainty (PSUU): Full-dimensional optimization of H_u, H_d, R,    |
+|   and R' across uncertainty distributions has NOT been completed. Current figures are initial     |
+|   reference heuristics based on simplifying assumptions.                                          |
+| - sAVAX <-> native AVAX dynamic coupling: Secondary market de-peg correlation, DEX liquidity     |
+|   depth, and 14-day unstaking latency under stress have NOT been empirically modeled.             |
+| - Comparative Research Scope: Historical post-mortems and modeling corpus cover ONLY Sky/MakerDAO,|
+|   Terra/UST, and Liquity V1/V2. No empirical modeling or stress analysis has been done on Ethena.  |
 +---------------------------------------------------------------------------------------------------+
 ```
 
@@ -269,57 +275,71 @@ In our Stage 4 cadCAD verification across 500 Monte Carlo paths calibrated to 2,
 
 > **Hansen's Query:** *"generally speaking how do you see anUSD relative to previous designs?"*
 
-In our comprehensive stablecoin post-mortem research (analyzing Liquity V1/V2, MakerDAO/Sky, Terra, and Ethena), we demonstrated that all existing stablecoins fail on at least one structural axis:
+To maintain strict epistemic discipline, **our comparative analysis is anchored exclusively in the three decentralized stablecoin archetypes that BCRG has formally analyzed and modeled in historical post-mortems:**
+
+1. **MakerDAO / Sky (DAI):** Asynchronous debt-auction liquidations under network congestion and oracle delays.
+2. **Liquity V1 & V2 (LUSD & BOLD):** Liquidation mitigation via Stability Pool capital offsets (V1) and decentralized user-set interest rate curves (V2).
+3. **Terra / UST:** Algorithmic endogenous reflexivity and bank-run death-spiral dynamics.
+
+> [!NOTE]
+> **Explicit Scope Boundary on Ethena & Basis Protocols:**  
+> While delta-neutral synthetic dollar designs (e.g., Ethena USDe) are prominent in current market discourse, **BCRG has not conducted quantitative modeling, empirical simulations, or smart contract audits on Ethena or basis-trade architectures.** In keeping with our principle of *"No Trust Transfer"* and avoiding unverified claims, we do not present modeled findings on Ethena, and restrict our formal comparative evaluation to the systems we have rigorously stress-tested.
 
 ```
 +---------------------------------------------------------------------------------------------------+
-|                              STABLECOIN DESIGN TRADEOFF TAXONOMY                                  |
+|                        EMPIRICALLY AUDITED STABLECOIN TRADEOFF TAXONOMY                           |
 +---------------------------------------------------------------------------------------------------+
 | 1. Centralized Fiat (USDC / USDT):                                                                |
 |    - High peg stability, but 100% off-chain yield extraction ($6.9M/mo drained from Avalanche).   |
 |    - Subject to custodial asset freezing and jurisdictional regulatory seizure.                   |
 |                                                                                                   |
-| 2. Debt-Auction CDPs (MakerDAO DAI / Liquity LUSD):                                               |
+| 2. Debt-Auction CDPs (MakerDAO / Sky):                                                            |
 |    - Asynchronous liquidation auctions fail during mempool congestion & oracle latency.           |
-|    - MakerDAO Black Thursday ($4M deficit) & Liquity BOLD complex multi-rate management.          |
+|    - Empirical failure: MakerDAO Black Thursday ($4.5M unbacked bad debt via $0 DAI bids).       |
 |                                                                                                   |
-| 3. Algorithmic Seigniorage (Terra / UST):                                                         |
-|    - Endogenous backing triggers reflexive death spirals when confidence breaks.                  |
+| 3. Stability-Pool & User-Rate Overcollateralized Debt (Liquity V1 & V2):                         |
+|    - V1 relies on passive Stability Pool capital which empties during prolonged drawdowns.        |
+|    - V2 (BOLD) introduces user-set rates, adding capital management complexity for borrowers.      |
 |                                                                                                   |
-| 4. Delta-Neutral Basis Synthetics (Ethena USDe):                                                  |
-|    - High yield in bull markets, but vulnerable to negative funding rate death spirals.           |
-|    - Severe CEX exchange counterparty and margin-call liquidation risks.                          |
+| 4. Algorithmic Seigniorage (Terra / UST):                                                         |
+|    - Endogenous backing triggers reflexive death spirals when market confidence breaks.          |
 |                                                                                                   |
 | 5. Dual-Tranche anUSD (Our Architecture):                                                         |
 |    - 100% on-chain, backed by sAVAX, zero debt-auction liquidations.                              |
-|    - Continuous-time mathematical crash bounds (-60% to -75%).                                    |
-|    - Programmatic yield retention recycling 100% of economic surplus into Avalanche.              |
+|    - Continuous-time mathematical crash bounds (-60% to -75% via Theorem 1).                      |
+|    - Programmatic yield retention recycling 100% of economic surplus into Avalanche (ACP-67).     |
 +---------------------------------------------------------------------------------------------------+
 ```
 
-### Comprehensive Multi-Dimensional Architectural Comparison
+### Comparative Analysis Across Formally Researched Architectures
 
-| Dimension | MakerDAO (DAI) | Liquity V1/V2 | Ethena (USDe) | anUSD (Avalanche Native) |
+| Dimension | MakerDAO / Sky (DAI) | Liquity V1 / V2 (LUSD / BOLD) | Terra (UST) | anUSD (Avalanche Native) |
 | :--- | :--- | :--- | :--- | :--- |
-| **Collateral Asset** | Mixed (ETH, WBTC, RWA) | ETH / WSTETH | Staked ETH + Short Perp | **$sAVAX$ (Liquid Staked AVAX)** |
-| **Liquidation Engine** | Asynchronous Dutch Auctions | Stability Pool / Collateral Redistribution | Exchange Margin Call | **Autonomous $O(1)$ Scalar State Resets** |
-| **Mempool Latency Risk** | High (Failed bids lead to bad debt) | Moderate | Extreme (CEX API / liquidation lag) | **Zero (Synchronous contract rebase)** |
-| **Max Safe Instant Drop** | **$-33.3\%$** (150% MCR) | **$-9.1\%$** (110% MCR) | Inversion / Margin Risk | **$-60.0\%$ to $-75.0\%$ (Theorem 1)** |
-| **Negative Yield Exposure** | Stability Fee Increases | User-set interest rate friction | Negative funding rate capital erosion | **Zero (Staking yield is purely positive)** |
-| **Ecosystem Value Capture** | Extracted to MKR / Sky | Extracted to LQTY stakers | Extracted to ENA holders | **Recirculated to AVAX & Validators (ACP-67)** |
-| **Cross-L1 Portability** | Custodial Bridges | Single-chain locked | Multi-chain synthetic wrapper | **Atomic Teleporter/ICM Burn-and-Mint** |
+| **Collateral Asset** | Mixed (ETH, WBTC, RWAs) | ETH / WSTETH | LUNA (Endogenous) | **$sAVAX$ (Liquid Staked AVAX)** |
+| **Solvency Mechanism** | Asynchronous Dutch Auctions | Stability Pool / Collateral Redistribution | Dynamic Mint/Burn Arbitrage | **Autonomous $O(1)$ Scalar State Resets** |
+| **Mempool Latency Risk** | High (Auction failures cause protocol bad debt) | Moderate (Pool depletion risk in prolonged drops) | Extreme (DEX congestion accelerates run) | **Zero (Synchronous deterministic rebase)** |
+| **Max Safe Instant Drop** | **$-33.3\%$** (at 150% MCR) | **$-9.1\%$** (at 110% MCR) | $0.0\%$ (Reflexive collapse) | **$-60.0\%$ to $-75.0\%$ (Theorem 1)** |
+| **Interest Rate Model** | Governance-directed Stability Fee | Algorithmic (V1) / User-Set Buckets (V2) | Fixed Anchor 20% (Subsidized) | **Structural Coupon Tranching ($R, R'$)** |
+| **Ecosystem Value Capture** | Extracted to MKR / Sky buybacks | Extracted to LQTY stakers | Speculative capital burn | **Recirculated to AVAX & Validators (ACP-67)** |
+| **Cross-L1 Portability** | External Custodial Bridges | Single-chain locked | Tendermint IBC | **Atomic Teleporter/ICM Burn-and-Mint** |
 
 ---
 
-## 5. Critical Open Research Frontier: Dynamic Coupling of $sAVAX$ and $AVAX$
+## 5. Critical Open Research Frontiers: Dynamic Coupling and Parameter Uncertainty
 
 > [!WARNING]
-> **Explicit Research Boundary & Epistemic Honesty:**  
-> While the mathematical mechanics of dual-class tranching and Theorem 1 crash bounds are proven under the assumption that collateral follows a Kou jump-diffusion process, **the empirical and econometric modeling of the dynamic coupling between $sAVAX$ and native $AVAX$ has NOT yet been completed.** This represents an active research frontier that requires joint exploration with BENQI.
+> **Explicit Research Boundaries & Epistemic Honesty:**  
+> While the mathematical mechanics of dual-class tranching and Theorem 1 crash bounds are proven under idealized Kou jump-diffusion price processes, **two critical areas of research remain unmodeled and must be explicitly characterized as provisional:**
+> 1. The empirical and econometric modeling of the dynamic coupling between $sAVAX$ and native $AVAX$.
+> 2. The rigorous execution of multi-dimensional Parameter Selection Under Uncertainty (PSUU).
+>
+> Neither of these has been completed. The numbers presented in our reference models are provisional heuristics that require joint empirical calibration with BENQI.
+
+### 5.1 Frontier 1: Dynamic Coupling of $sAVAX$ and Native $AVAX$
 
 In all prior modeling baselines, $sAVAX$ was treated as an idealized yield-bearing asset satisfying $P_{sAVAX}(t) = \kappa(t) \cdot P_{AVAX}(t)$, where $\kappa(t) \ge 1.0$ monotonically increases with accumulated staking rewards. In reality, **$sAVAX$ is a secondary-market liquid token subject to market microstructure frictions, liquidity premiums, unbonding delays, and de-pegging risks.**
 
-### 5.1 Key Stress Vectors Requiring Joint Research with BENQI
+Key stress vectors requiring joint research with BENQI include:
 
 1. **Secondary Market De-Peg Risk ($sAVAX / AVAX$ Price Divergence):**
    * During violent market liquidations or systemic deleveraging events across Avalanche, arbitrageurs may liquidate $sAVAX$ on DEXs (Pharaoh, LFJ) rather than waiting for protocol unbonding queues.
@@ -338,6 +358,27 @@ In all prior modeling baselines, $sAVAX$ was treated as an idealized yield-beari
    * Locking substantial quantities of $sAVAX$ into anUSD vaults could reduce the available $sAVAX$ supply on BENQI lending pools, impacting borrow utilization and interest rates.
    * *Required Research:* Simulating the general equilibrium between anUSD vault deposits and BENQI lending market utilization.
 
+### 5.2 Frontier 2: Parameter Selection Under Uncertainty (PSUU)
+
+The specific numerical parameters cited throughout this document and in reference materials:
+* Upper Reset Barrier: $H_u = \$2.00$
+* Lower Reset Barrier: $H_d = \$0.25$
+* Senior Required Coupon: $R = 7.30\%$ p.a.
+* anUSD Base Coupon: $R' = 2.50\%$ p.a.
+* Split Ratio: $\alpha = 1.00$ (1:1 primary split)
+
+**These figures are initial reference heuristics from preliminary screening models, NOT the output of a finalized PSUU.**
+
+#### What a Rigorous PSUU Involves and Why It Has Not Yet Been Done
+A rigorous PSUU requires evaluating an objective policy function over a multi-dimensional parameter grid across tens of thousands of simulated paths, balancing competing performance criteria:
+1. **Minimizing Reset Churn:** Lower values of $H_u$ and higher values of $H_d$ increase reset frequency, creating gas overhead and tax/accounting frictions for token holders.
+2. **Maximizing Crash Solvency:** Expanding the distance between par and $H_d$ increases leverage divergence and heightens tail jump vulnerability.
+3. **Optimizing Tranche Demand Elasticity:** The spread $(2R - R')$ must be calibrated to real-world capital demand; setting $R'$ too low impairs anUSD peg velocity, while setting it too high renders anYIELD uncompetitive against alternative yield instruments.
+
+Because these trade-offs depend fundamentally on empirical distributions that only BENQI possesses—namely, the velocity of $sAVAX$ redemptions, the staking duration tolerance of BENQI delegators, and historical DEX slippage curves—**BCRG has intentionally refrained from prematurely locking these parameters.**
+
+We present these numbers as transparent, testable reference baselines from our Stage 2 screening, and we invite BENQI to collaborate in executing the formal PSUU optimization.
+
 ---
 
 ## 6. Synthesis & Next Steps for Collaboration
@@ -348,12 +389,12 @@ To progress from this working paper to an audited, production-grade protocol, we
 
 1. **Exchange of Historical $sAVAX$ Telemetry:** Incorporate BENQI's granular historical data on validator delegation cycles, unbonding queue times, and DEX liquidity depth into our cadCAD digital twin.
 2. **Joint Co-Modeling of the $sAVAX \leftrightarrow AVAX$ Frontier:** Formally calibrate the de-peg elasticity and unstaking queue parameters discussed in Section 5.
-3. **Parameter Selection Under Uncertainty (PSUU):** Establish consensus boundaries for initial pilot launch parameters on Avalanche Fuji Testnet:
-   * Upper Barrier: $H_u = \$2.00$
-   * Lower Barrier: $H_d = \$0.25$
-   * Senior Base Coupon: $R = 7.30\%$
-   * anUSD Coupon: $R' = 2.50\%$
-   * Initial Collateral Cap: Pilot sizing calibrated to BENQI liquid staking depth.
+3. **Joint Parameter Selection Under Uncertainty (PSUU):** Co-execute the full-dimensional PSUU to optimize the candidate parameters for an Avalanche Fuji Testnet pilot:
+   * Candidate Upper Barrier: $H_u \approx \$2.00$ (to be calibrated vs. churn)
+   * Candidate Lower Barrier: $H_d \approx \$0.25$ (to be calibrated vs. tail jump tolerance)
+   * Candidate Senior Base Coupon: $R \approx 7.30\%$
+   * Candidate anUSD Coupon: $R' \approx 2.50\%$
+   * Pilot Collateral Cap: Initial debt ceiling calibrated to BENQI liquid staking depth.
 
 We look forward to reviewing these mechanics and simulation data with the BENQI engineering team.
 
