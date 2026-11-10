@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 210" width="100%" height="100%" style="background:#F8FAFC; font-family:'Inter',system-ui,sans-serif;">
+  <defs>
+    <marker id="arrow2" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#475569"/>
+    </marker>
+    <filter id="shadow2" x="-5%" y="-5%" width="110%" height="115%" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="2" stdDeviation="3" flood-opacity="0.06"/>
+    </filter>
+  </defs>
+
+  <text x="380" y="22" text-anchor="middle" font-size="13" font-weight="700" fill="#1E293B">Deterministic Reset State Machine</text>
+
+  <!-- Left: Upside Reset -->
+  <g filter="url(#shadow2)">
+    <rect x="25" y="38" width="345" height="155" rx="6" fill="#F0FDF4" stroke="#22C55E" stroke-width="1.5"/>
+    <text x="45" y="62" font-size="11.5" font-weight="700" fill="#166534">Collateral Rally Reset (Upside)</text>
+    
+    <text x="45" y="85" font-size="9.5" font-weight="600" fill="#15803D">Trigger:</text>
+    <text x="95" y="85" font-size="9" fill="#14532D">AVAX price appreciates significantly above baseline</text>
+
+    <text x="45" y="105" font-size="9.5" font-weight="600" fill="#15803D">Execution:</text>
+    <text x="45" y="122" font-size="9" fill="#14532D">• Junior equity (anAVAX) harvests accrued capital gains</text>
+    <text x="45" y="137" font-size="9" fill="#14532D">• Gains distributed to holders directly in native sAVAX</text>
+    <text x="45" y="152" font-size="9" fill="#14532D">• Baseline leverage ratio seamlessly restored to 2× par</text>
+
+    <text x="45" y="174" font-size="9" font-weight="600" fill="#166534">Outcome: Zero debt inflation; profits extracted cleanly in sAVAX</text>
+  </g>
+
+  <!-- Right: Downside Reset -->
+  <g filter="url(#shadow2)">
+    <rect x="390" y="38" width="345" height="155" rx="6" fill="#FEF2F2" stroke="#EF4444" stroke-width="1.5"/>
+    <text x="410" y="62" font-size="11.5" font-weight="700" fill="#991B1B">Collateral Drawdown Reset (Downside)</text>
+    
+    <text x="410" y="85" font-size="9.5" font-weight="600" fill="#B91C1C">Trigger:</text>
+    <text x="460" y="85" font-size="9" fill="#7F1D1D">AVAX price declines sharply toward safety threshold</text>
+
+    <text x="410" y="105" font-size="9.5" font-weight="600" fill="#B91C1C">Execution:</text>
+    <text x="410" y="122" font-size="9" fill="#7F1D1D">• Senior bondholders receive principal payback in sAVAX</text>
+    <text x="410" y="137" font-size="9" fill="#7F1D1D">• Remaining shares execute reverse-split balance consolidation</text>
+    <text x="410" y="152" font-size="9" fill="#7F1D1D">• Target 2× leverage and par collateral coverage restored</text>
+
+    <text x="410" y="174" font-size="9" font-weight="600" fill="#991B1B">Outcome: Zero liquidation auctions, zero slippage, zero bad debt</text>
+  </g>
+</svg>

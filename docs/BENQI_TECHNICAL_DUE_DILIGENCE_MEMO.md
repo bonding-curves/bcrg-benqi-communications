@@ -79,6 +79,8 @@ The current design specifies a conversion rule:
 
 We should confirm the precise definition and denomination of Token A, including whether the ratio refers to token units or dollar value. This is important for establishing that the conversion preserves value.
 
+![sAVAX Product Factory & Two-Tier Architecture](figures/diagram_executive.svg)
+
 ### 2.3 How the 2× leverage changes with AVAX
 
 The junior tranche is calculated as the value of the collateral minus the senior claim.
@@ -142,6 +144,8 @@ The intention is to avoid relying on a large number of individual liquidation tr
 The reset logic is intended to require a fixed amount of computation. However, execution still depends on the oracle, transaction inclusion and the relevant on-chain trigger mechanism.
 
 We should provide a before-and-after balance sheet for both resets, particularly to establish how the upward profit distribution and share split work together.
+
+![Deterministic Reset State Machine](figures/diagram2_reset.svg)
 
 ---
 
@@ -243,6 +247,8 @@ At the lower reset boundary, the stated \$0.75 amortisation leaves \$0.50 of col
 These calculations do not account for any additional protection that may be specified elsewhere in the mechanism.
 
 We should therefore include the detailed proof and the exact assumptions behind the reported 75% and 60% results before treating them as final.
+
+![Flash Crash Tolerance Boundaries](figures/fig3_black_swan_crash_tolerance.png)
 
 ### 4.3 Simulation results
 
