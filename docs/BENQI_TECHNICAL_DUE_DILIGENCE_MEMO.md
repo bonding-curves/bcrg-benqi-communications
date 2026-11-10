@@ -20,7 +20,7 @@ During subsequent technical discussions, four core architectural areas were iden
 3. **Downside Stress Mechanics:** Vault behavior, internal debt amortization, and solvency boundaries during prolonged market contractions (e.g., a 50%–60% monthly decline) and discontinuous flash crashes.
 4. **Comparative Mechanism Architecture:** Structural risk trade-offs relative to debt-auction (MakerDAO/Sky), stability-pool (Liquity), and algorithmic (Terra) paradigms.
 
-This memorandum provides the balance-sheet accounting, formal reset mechanics, and stress-testing specifications addressing these areas, establishing a rigorous basis for collaborative parameter calibration.
+This memorandum provides the balance-sheet accounting, formal reset mechanics, and stress-testing specifications addressing these areas, and identifies the open modeling frontiers that require further research.
 
 ---
 
@@ -60,19 +60,21 @@ Because anBOND accrues coupon value over time, its terminal redemption value dri
        [ anUSD Stablecoin ]           [ anYIELD High-Yield ]
              $1.00 par                      $1.00 par
        • Non-volatile $1.00 peg       • Concentrated residual coupon
-       • Optional base rate R'        • Yield formula: 2R - R' = 12.1% p.a.
+       • Optional base rate R'        • Yield formula: R_anYIELD = 2R - R'
          (e.g., 2.5% p.a.)
 ```
 
 * **anUSD:** The unit-pegged stable monetary instrument. It maintains a $1.00 target and may distribute an optional base money-market yield $R'$ (e.g., 2.5% p.a.).
 * **anYIELD:** A subordinated yield-concentrating instrument. It captures the residual coupon of the underlying anBOND units:
-  $$\text{Yield on anYIELD} = 2R - R' = 2(7.3\%) - 2.5\% = 12.1\%$$
+  $$R_{\text{anYIELD}} = 2R - R'$$
+
+At baseline reference rates ($R = 7.3\%$ and $R' = 2.5\%$ p.a.), the resulting yield on anYIELD evaluates to **12.1% p.a.** (calculated as 2 × 7.3% − 2.5% = 12.1%).
 
 **Minting and Redemption Conversion Rules:**
 * **Issuance (Mint):** Locking **2 units of anBOND** mints **1 unit of anUSD + 1 unit of anYIELD**.
 * **Settlement (Redeem):** Surrendering **1 unit of anUSD + 1 unit of anYIELD** redeems **2 units of anBOND**.
 
-*(Accounting Note: Parameter calibration will confirm whether the 2:1 ratio is enforced strictly in unit quantities or dollar-equivalent nominal value, ensuring strict value conservation across multi-epoch operations).*
+*(Accounting Note: Final technical specifications must confirm whether the 2:1 ratio is enforced strictly in unit quantities or dollar-equivalent nominal value, ensuring strict value conservation across multi-epoch operations).*
 
 ---
 
@@ -151,7 +153,9 @@ DOWNWARD RESET BALANCE SHEET WALKTHROUGH:
 
 Because $2.00 of sAVAX collateral is pledged for every $1.00 of senior debt, the protocol captures consensus staking yield on **twice the notional debt base**:
 
-$$\text{Gross Staking Yield} = 2 \times (4.5\% \text{ to } 5.5\%) = 9.0\% \text{ to } 11.0\%$$
+$$\text{Gross Staking Yield} = 2 \times r_{\text{sAVAX}}$$
+
+For an illustrative sAVAX consensus reward rate of $r_{\text{sAVAX}}$ between 4.5% and 5.5% p.a., gross cash flow across the collateral base equals **9.0% to 11.0% p.a.** relative to senior notional debt.
 
 This gross cash flow feeds a transparent, structured yield transmission waterfall:
 
@@ -163,7 +167,7 @@ This gross cash flow feeds a transparent, structured yield transmission waterfal
 [ 1. Senior Fixed Obligations ]   [ 2. Protocol Surplus Yield ]
        R = 7.3% p.a.                      ~2.0% - 4.0% p.a.
        │                                  │
-       ├─ anUSD base rate: 2.5%           └─ Fully Modular Strategic Allocation:
+       ├─ anUSD base rate: 2.5%           └─ Strategic Allocation Options:
        └─ anYIELD coupon: 12.1%              • Accrual to QI stakers
                                              • sAVAX/AVAX DEX pool depth
                                              • Internal risk reserve buffer
@@ -175,8 +179,8 @@ The October 2026 Executive Brief referenced a surplus allocation of 65% buyback 
 
 **We clarify that this distribution was modeled on an informal proposal from Avalanche Community Proposal (ACP-67) discussions as an illustrative framework for Avalanche Foundation alignment. It does not represent an architectural constraint or mandate for BENQI.**
 
-From BENQI’s commercial perspective, protocol surplus is fully modular and controlled via protocol governance. Potential allocation pathways include:
-* **Direct Accrual to QI Stakers:** Routing surplus cash flows directly to $QI lockers or stakers.
+From BENQI’s perspective, protocol surplus is fully modular and controlled via protocol governance. Potential allocation pathways include:
+* **Accrual to QI Stakers:** Routing surplus cash flows directly to $QI lockers or stakers.
 * **DEX Liquidity Incentives:** Subsidizing sAVAX/AVAX liquidity depth on Pharaoh or LFJ to tighten secondary peg efficiency.
 * **On-Chain Risk Reserves:** Capitalizing an internal emergency liquidity pool to backstop secondary market redemption dynamics.
 
@@ -227,7 +231,7 @@ To maintain research rigor, we clearly distinguish between verified modeling and
 * **Simulated & Validated Domains:**
   * 500 Kou jump-diffusion paths parameterized on 2,140 days of empirical Avalanche price volatility ($\sigma = 89.15\%$).
   * Resets executed cleanly under programmed boundaries, yielding **0.00% senior haircut probability** with an average reset frequency of 3.71 events per annum.
-* **Unsimulated Frontiers Requiring Empirical Calibration:**
+* **Unsimulated Frontiers Requiring Empirical Modeling:**
   * We have **not** modeled a multi-agent deterministic 30-day crash scenario incorporating behavioral feedback loops following consecutive resets.
   * We have **not** simulated potential secondary market price slippage if amortized senior holders immediately liquidate received sAVAX on DEXs.
   * We have **not** modeled P-Chain unstaking queue delays under correlated network-wide withdrawal runs.
@@ -247,39 +251,39 @@ To maintain research rigor, we clearly distinguish between verified modeling and
 
 ---
 
-## 6. Collaborative Scope & Operational Parameter Calibration
+## 6. Current Research Boundaries & Open Modeling Areas
 
-### 6.1 Boundary Between Public On-Chain Data and BENQI Operational Inputs
+While the baseline mathematical architecture and jump-diffusion boundaries are established, transitioning this mechanism into a production protocol requires addressing several critical unmodeled dynamics:
 
-All historical on-chain metrics—including sAVAX contract balances, mint/redeem events, P-Chain validator stakes, and DEX liquidity depth on LFJ and Pharaoh—are fully public. BCRG will index and incorporate these directly into the quantitative model.
+### 6.1 The sAVAX vs. AVAX Market Relationship
 
-Collaborative calibration with BENQI is specifically required for internal operational and commercial parameters that cannot be inferred from the blockchain:
+Our baseline proofs assume 1 sAVAX redeems at its exact theoretical exchange rate without market friction. In reality, the dynamic coupling between sAVAX and AVAX introduces three distinct risk channels that have not yet been formally modeled:
 
-1. **Unstaking Reserve & Replenishment Policies:** BENQI maintains an instant unstaking pool on C-Chain to mitigate 14-day P-Chain unstaking delays. What cash buffer percentage is targeted, and what operational thresholds govern off-chain replenishment bot execution during high-volume periods?
-2. **Staker Demographics & Flow Attribution:** What proportion of current sAVAX is held by sticky institutional partners (with bilateral communication channels) versus high-velocity leverage loopers likely to liquidate physical sAVAX post-reset?
-3. **Liquidity Defense Arrangements:** Does BENQI maintain bilateral market-making agreements or designated retainers to support the sAVAX peg during severe market stress?
+1. **Secondary DEX Discounts:** During sharp market panics, users frequently sell sAVAX on DEXs (Pharaoh, LFJ) rather than waiting for unstaking queues. If sAVAX trades at a discount (e.g., $0.94\text{ AVAX}$), effective vault collateral value contracts faster than spot AVAX, compressing the equity cushion.
+2. **Unstaking Queue Latency:** In a downward reset, senior holders receive 75% of their principal in physical sAVAX. If a significant cohort attempts to unbond to native AVAX simultaneously, immediate C-Chain liquidity reserves could be depleted, forcing holders into the 14-day P-Chain unstaking queue. The market impact of this latency requires dedicated modeling.
+3. **Staking APR Volatility:** Network-wide staking yield fluctuates with total staked AVAX and network activity. If the underlying sAVAX staking yield compresses from 5% to 3%, senior coupon rates ($R, R'$) must adapt dynamically to avoid margin compression.
 
-### 6.2 Collaborative Parameter Optimization (PSUU)
+### 6.2 Parameter Selection Under Uncertainty (PSUU)
 
-The baseline parameters in this memorandum:
+The numerical values referenced in this note:
 * Reset boundaries: $H_u = 2.00$ (+50% gain), $H_d = 0.25$ (−37.5% drop)
 * Senior coupon: $R = 7.3\%$ p.a.
 * anUSD base yield: $R' = 2.5\%$ p.a.
 
-These represent **reference engineering starting points**, not locked production values.
+These represent **preliminary reference starting points** used for structural illustration, not optimized deployment values.
 
-Formal Parameter Selection Under Uncertainty (PSUU) will be conducted jointly with BENQI to calibrate:
-* **Commercial Yield Capture:** The gross margin retained by BENQI on raw staking rewards prior to senior coupon allocation.
-* **Surplus Governance:** The optimal split between $QI staker accrual, liquidity incentives, and protocol reserves.
-* **Reset Frequency Optimization:** Balancing narrower boundaries (which minimize jump risk but increase annual reset overhead to ~3.7/year) against wider boundaries (which reduce resets to ~1–2/year but expand peak leverage).
+A rigorous multi-variable parameter optimization (PSUU) has not yet been executed. Developing an empirical parameter surface requires modeling several structural trade-offs:
+* **Reset Frequency vs. Execution Cost:** Narrower boundaries reduce leverage drift but trigger resets more frequently (~3.7/year), increasing on-chain execution overhead. Wider boundaries reduce reset frequency (~1–2/year) but allow leverage to expand higher, widening jump risk exposure.
+* **Yield Spread Calibration:** Calibrating the sustainable spread between gross staking cash flow and senior coupons under stochastic staking yield regimes.
+* **Collateral Buffer Sizing:** Sizing the junior equity cushion against correlated market crashes and secondary DEX peg deviations.
 
 ---
 
-## 7. Next Steps
+## 7. Status & Technical Availability
 
-The primary advantage of the anUSD architecture is that it transforms sAVAX into an active, productive reserve asset for an ecosystem-native dollar while structurally eliminating liquidation auction contagion.
+This memorandum summarizes the foundational mechanics and current research findings for the anUSD design in response to preliminary technical review questions. 
 
-With the core mathematical mechanics and balance-sheet relationships formalized, BCRG proposes coordinating a technical working session with BENQI’s risk and strategy team to review operational buffer policies, align on commercial margin targets, and initiate joint parameter calibration.
+As BENQI continues its evaluation of the mechanism, BCRG remains available to address further technical questions or discuss the analytical methodology behind these preliminary models.
 
 ***
 
