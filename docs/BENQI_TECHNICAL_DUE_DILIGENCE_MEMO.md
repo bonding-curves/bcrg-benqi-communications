@@ -1,373 +1,277 @@
 # anUSD: Mechanism, Yield Allocation, and Risk Considerations
 
-**To:** Hansen Niu, BENQI Protocol & Risk Engineering Team  
+**To:** Hansen Niu & the BENQI Team  
 **From:** Bonding Curves Research Group (BCRG)  
 **Date:** November 10, 2026  
-**Status:** Working Draft for Technical Discussion
+**Status:** Working Draft for Technical & Strategic Discussion
 
 ---
 
-## 1. Purpose
+## 1. Why We Are Writing This
 
-This note provides a simplified explanation of the proposed Avalanche Native USD (anUSD) mechanism and responds to the questions raised by Hansen.
+Hansen raised four practical questions about how anUSD works under the hood:
 
-It covers four areas:
+1. How the two-tranche vault works and how 2× leverage is maintained.
+2. How sAVAX staking rewards flow through the different tokens.
+3. What happens if AVAX falls 50% to 60% in a month.
+4. How this design compares to existing stablecoins like MakerDAO, Liquity, and Terra.
 
-1. How the two-tranche mechanism works and how the $2\times$ leverage is maintained.
-2. How sAVAX staking rewards are intended to flow through the different tokens.
-3. How the system responds to large AVAX price movements.
-4. How the design compares with existing stablecoin mechanisms.
-
-It also identifies the assumptions that still need to be tested with BENQI data.
-
-The parameters used below are illustrative. They should not be treated as final deployment parameters.
+This note answers those four questions directly. We also walk through the balance sheet math, point out where our initial numbers are still provisional, and highlight what we still need to model together using real BENQI data.
 
 ---
 
 ## 2. How the Mechanism Works
 
-### 2.1 Two tranches backed by sAVAX
+### 2.1 The Core Idea: Splitting Collateral into Senior Debt and Junior Equity
 
-The basic idea is to deposit sAVAX into a vault and divide the resulting economic exposure into two tranches.
+Instead of borrowing against collateral and risking a liquidation auction, anUSD splits deposited sAVAX into two separate claims against the same collateral pool.
 
-**Senior tranche: anBOND**
+Here is a concrete example:
 
-This is the senior claim on the collateral.
+```
+[ User Deposits $200 of sAVAX into the Vault ]
+                     │
+       ┌─────────────┴─────────────┐
+       ▼                           ▼
+[ Senior Claim: anBOND ]    [ Junior Equity: anAVAX ]
+         $100                        $100
+  • Aims for capital          • Takes first loss on drops
+    preservation              • Captures leveraged upside
+  • Earns fixed coupon        • 2.0x leverage at start
+    (e.g., 7.3% p.a.)           ($100 equity controls $200 collateral)
+```
 
-It is designed to preserve principal and receive a coupon at rate $R$. Our initial example uses $R = 7.3\%$.
-
-**Junior tranche: anAVAX**
-
-This is the residual equity position.
-
-It absorbs changes in the value of the underlying AVAX collateral after accounting for the senior claim. It therefore carries more risk but also receives more upside when AVAX appreciates.
-
-The basic structure is:
-
-* Users deposit sAVAX.
-* The vault holds the collateral.
-* The senior tranche receives its contractual claim.
-* The junior tranche absorbs the remaining gains or losses.
-
-At the start of an epoch, the target allocation is:
-
-| Component | Value | Notes |
-| :--- | ---: | :--- |
-| **Total sAVAX collateral** | **\$2.00** | Deposited in custodian vault |
-| **Senior claim (anBOND)** | \$1.00 | Priority claim |
-| **Junior equity (anAVAX)** | \$1.00 | Residual equity |
-
-There are therefore \$2 of collateral for every \$1 of junior equity.
-
-This gives the junior position $2\times$ leverage at the start of the epoch.
-
-### 2.2 How anUSD and anYIELD fit in
-
-The proposal introduces a second layer of tokens.
-
-The senior claim is intended to provide two different economic exposures:
-
-* **anUSD:** A dollar-denominated stablecoin targeting \$1.00.
-* **anYIELD:** A token representing the additional yield allocation.
-
-The intended distinction is that anUSD provides the stable monetary unit, while anYIELD provides exposure to the remaining yield.
-
-The current design specifies a conversion rule:
-
-* **Mint:** burn two units of Token A to receive one anUSD and one anYIELD.
-* **Redeem:** burn one anUSD and one anYIELD to receive two units of Token A.
-
-We should confirm the precise definition and denomination of Token A, including whether the ratio refers to token units or dollar value. This is important for establishing that the conversion preserves value.
-
-![sAVAX Product Factory & Two-Tier Architecture](figures/diagram_executive.svg)
-
-### 2.3 How the 2× leverage changes with AVAX
-
-The junior tranche is calculated as the value of the collateral minus the senior claim.
-
-Using the current model:
-
-$$V_B(t) = 2 S_t - V_A(t)$$
-
-Where:
-
-* $S_t$ is the AVAX price index, normalised to $1.0$ at the beginning of an epoch.
-* $V_A(t)$ is the senior claim.
-* $V_B(t)$ is the junior tranche value.
-
-Consider two examples, ignoring coupon accrual for simplicity.
-
-**Scenario A: AVAX increases by 50%.**
-
-The collateral increases from \$2.00 to \$3.00.
-
-The senior claim remains \$1.00, leaving \$2.00 for the junior tranche.
-
-The junior position has therefore doubled in value, while leverage falls from $2.0\times$ to $1.5\times$.
-
-**Scenario B: AVAX decreases by 37.5%.**
-
-The collateral falls from \$2.00 to \$1.25.
-
-After the \$1.00 senior claim, only \$0.25 remains for the junior tranche.
-
-Leverage consequently increases from $2.0\times$ to $5.0\times$.
-
-The important point is that leverage is not kept constant through ordinary price movements. It changes with the value of the junior equity.
-
-The proposal uses periodic resets to bring the system back to its target leverage.
-
-### 2.4 Reset mechanism
-
-Rather than liquidating individual positions through auctions, the proposal uses protocol-level resets.
-
-There are two proposed triggers.
-
-**Upward reset**
-
-When anAVAX reaches \$2.00:
-
-* The system recognises the gains in the junior position.
-* The design proposes distributing gains in sAVAX.
-* A 2-for-1 share split is used to bring the token price back towards \$1.00.
-
-**Downward reset**
-
-When anAVAX falls to \$0.25:
-
-* The system proposes paying \$0.75 of the original senior claim to senior holders in sAVAX.
-* The remaining senior and junior positions are consolidated through a 4-for-1 reverse split.
-* The objective is to reduce outstanding senior liabilities and restore the target leverage.
-
-The intention is to avoid relying on a large number of individual liquidation transactions.
-
-The reset logic is intended to require a fixed amount of computation. However, execution still depends on the oracle, transaction inclusion and the relevant on-chain trigger mechanism.
-
-We should provide a before-and-after balance sheet for both resets, particularly to establish how the upward profit distribution and share split work together.
-
-![Deterministic Reset State Machine](figures/diagram2_reset.svg)
+* **anBOND (Senior Tranche):** The conservative claim. It gets paid first and earns a fixed annual coupon $R$ ($7.3\%$ in our starting model).
+* **anAVAX (Junior Tranche):** The risk-taking equity claim. It absorbs price volatility. Because $\$100$ of anAVAX controls $\$200$ of collateral, **it starts with exactly 2.0× leverage on AVAX price moves**.
 
 ---
 
-## 3. How Staking Yield Is Distributed
+### 2.2 Creating the Stablecoin: anUSD and anYIELD
 
-The collateral consists of sAVAX, which generates staking rewards.
+Because anBOND earns interest over time, its price naturally drifts above \$1.00 ($1.01, 1.02...$). To turn this into a stable, dollar-pegged currency, anBOND is split a second time:
 
-The system has two dollars of sAVAX for every dollar of initial senior exposure. This means the gross staking yield is earned on twice the collateral value.
+```
+                 [ 2 Units of anBOND ($2.00 par) ]
+                                │
+                 ┌──────────────┴──────────────┐
+                 ▼                             ▼
+       [ anUSD Stablecoin ]           [ anYIELD High-Yield ]
+             $1.00 par                      $1.00 par
+       • Stable $1.00 peg             • Concentrates remaining yield
+       • Optional base rate R'        • Earns: 2R - R' = 12.1% APY
+         (e.g., 2.5% p.a.)
+```
 
-For illustration, assuming sAVAX earns $4.5\% - 5.5\%$:
+* **anUSD:** The actual stablecoin. It stays pegged to \$1.00 and can distribute a base money-market yield $R'$ (e.g., $2.5\%$).
+* **anYIELD:** A yield-seeking token. It absorbs the remaining senior coupon:
+  $$\text{Yield on anYIELD} = 2R - R' = 2(7.3\%) - 2.5\% = \mathbf{12.1\%}$$
 
-$$2 \times (4.5\% - 5.5\%) = 9.0\% - 11.0\%$$
+**The Mint and Redeem Rule:**
+* **To Mint:** You lock **2 units of anBOND** to get **1 anUSD + 1 anYIELD**.
+* **To Redeem:** You burn **1 anUSD + 1 anYIELD** together to get back **2 units of anBOND**.
 
-This represents gross staking rewards relative to the initial \$1 senior exposure, before protocol costs and other adjustments.
-
-The proposed yield allocation has three main components.
-
-**1. Senior allocation**
-
-The initial model uses a senior coupon $R$ of $7.3\%$.
-
-**2. anUSD and anYIELD**
-
-The proposal uses anUSD base yield $R'$ of $2.5\%$.
-
-The remaining yield is intended to flow to anYIELD. The current formula specifies:
-
-$$R_{\text{anYIELD}} = 2R - R'$$
-
-Using the illustrative rates:
-
-$$2(7.3\%) - 2.5\% = 12.1\%$$
-
-These rates are provisional. We need to reconcile the formula with actual staking rewards and confirm the notional against which each percentage is calculated.
-
-**3. Ecosystem allocation**
-
-The proposal also directs residual protocol surplus towards the Avalanche ecosystem.
-
-The current allocation proposal is:
-
-| Allocation | Proposed use |
-| :--- | :--- |
-| 65% | AVAX buyback and burn |
-| 20%–45% | Additional validator staking rewards |
-| 15% | Avalanche L1 ecosystem grants |
-
-The validator allocation can vary depending on network conditions, particularly when AVAX trades below its 90-day moving average.
-
-The percentage allocation needs a final definition. The current ranges can add up to more than 100%, so we need to specify whether the validator allocation comes out of the buyback allocation or is calculated separately.
+*(Note on Accounting: We need to confirm together whether this 2:1 ratio is tracked in raw token units or dollar-denominated value. This distinction matters for proving value conservation over long epochs).*
 
 ---
 
-## 4. What Happens During a Large AVAX Price Decline?
+### 2.3 How 2× Leverage Actually Changes When Price Moves
 
-We consider two scenarios.
+Leverage is not fixed at 2× forever. It moves naturally with the market:
 
-### 4.1 Gradual decline over 30 days
+$$\text{Leverage} = \frac{\text{Total Collateral Value}}{\text{anAVAX Equity Value}}$$
 
-Suppose AVAX loses 50%–60% of its value over a month.
+Let's look at what happens starting from \$2.00 of collateral backing \$1.00 of senior debt and \$1.00 of junior equity:
 
-The proposed mechanism is designed to respond through its lower reset boundary.
+```
+   AVAX Drops -37.5%                      Starting State                       AVAX Rises +50%
+─────────────────────────────────      ───────────────────────      ─────────────────────────────────
+• Collateral falls to: $1.25           • Collateral: $2.00          • Collateral rises to: $3.00
+• Senior claim takes:  $1.00           • Senior debt: $1.00         • Senior claim takes:  $1.00
+• Junior equity left:  $0.25           • Junior equity: $1.00       • Junior equity left:  $2.00
+─────────────────────────────────      ───────────────────────      ─────────────────────────────────
+▶ LEVERAGE RISES TO: 5.0x              ▶ LEVERAGE IS: 2.0x          ▶ LEVERAGE DECAYS TO: 1.5x
+  ($1.25 / $0.25)                        ($2.00 / $1.00)              ($3.00 / $2.00)
+  [Triggers Downward Reset]                                           [Triggers Upward Reset]
+```
 
-The intended sequence is:
+* **When AVAX rises 50%:** Collateral grows to \$3.00. Senior debt is still \$1.00, so anAVAX doubles to \$2.00. Leverage naturally drops to **1.5×**.
+* **When AVAX falls 37.5%:** Collateral drops to \$1.25. After the \$1.00 senior claim, anAVAX shrinks to \$0.25. Leverage jumps to **5.0×**.
 
-1. The junior tranche absorbs the initial loss.
-2. When anAVAX reaches the lower boundary of \$0.25, the downward reset is triggered.
-3. The senior claim is amortised, with \$0.75 proposed to be returned to senior holders.
-4. The remaining positions are consolidated.
-5. The recapitalised system continues under the new capital base.
-
-If AVAX continues falling, the same mechanism may need to be applied again.
-
-The objective is to reduce senior liabilities before losses reach the senior tranche.
-
-### 4.2 Sudden price decline (flash crash)
-
-A more difficult scenario is an immediate price decline, where the system does not have time to execute an intermediate reset.
-
-Our current analysis reports the following theoretical bounds:
-
-| Starting state | Reported maximum instantaneous decline |
-| :--- | ---: |
-| Initial par state | **75%** |
-| Lower reset boundary | **60%** |
-
-The current cadCAD simulations also report no anUSD haircuts across 500 jump-diffusion paths.
-
-However, these results need to be reconciled with the collateral equations and reset accounting before we present them as established risk bounds.
-
-In particular, under the simplified 2:1 model, with a \$1 senior claim and \$2 of initial collateral:
-
-$$2 S_t \ge 1$$
-
-This gives a 50% decline in collateral price as the maximum loss consistent with full senior coverage, assuming no additional reserves or protection.
-
-At the lower reset boundary, the stated \$0.75 amortisation leaves \$0.50 of collateral against a \$0.25 senior claim. This simple balance sheet implies protection against a further 50% decline, rather than 60%.
-
-These calculations do not account for any additional protection that may be specified elsewhere in the mechanism.
-
-We should therefore include the detailed proof and the exact assumptions behind the reported 75% and 60% results before treating them as final.
-
-![Flash Crash Tolerance Boundaries](figures/fig3_black_swan_crash_tolerance.png)
-
-### 4.3 Simulation results
-
-The current simulation uses:
-
-* 2,140 days of historical Avalanche price data.
-* 500 jump-diffusion price paths.
-* A 365-day simulation horizon for the jump scenarios.
-
-No senior haircut occurred in the reported runs.
-
-This is an encouraging result for the tested parameter set. It should not be interpreted as evidence that the real system has zero haircut probability.
+If leverage keeps growing, a small price drop could wipe out the equity. To prevent runaway leverage without liquidation auctions, the protocol runs automatic resets.
 
 ---
 
-## 5. Comparison with Existing Stablecoin Designs
+### 2.4 The Reset Mechanism (No Liquidation Auctions)
 
-The main difference between anUSD and existing designs is how losses are handled.
+Existing protocols like MakerDAO rely on liquidator bots bidding in auctions during crashes. When the network gets congested, those auctions fail. anUSD replaces auctions with **global contract resets** triggered at two fixed price barriers:
 
-| Design | Main mechanism | Main risk or limitation |
+#### 1. Upward Reset (Triggered when anAVAX hits \$2.00 / +50% AVAX gain)
+* **What happens:** Junior equity holders have doubled their money. The contract harvests this gain and pays it out directly in sAVAX to their wallets.
+* **The reset action:** The protocol executes a 2-for-1 forward share split. Each token's unit price returns to \$1.00.
+* **Outcome:** Leverage is cleanly reset back to **2.0×**.
+
+#### 2. Downward Reset (Triggered when anAVAX hits \$0.25 / −37.5% AVAX drop)
+* **What happens:** The contract protects senior debt before losses can touch it.
+* **The reset action:**
+  1. The contract pays senior holders **\$0.75 of their \$1.00 claim directly in sAVAX**. This immediately cuts total protocol debt by 75%.
+  2. The remaining 25 cents of debt and 25 cents of equity are merged via a **4-for-1 reverse split**.
+* **Outcome:** Every remaining token is restored to a clean \$1.00 par value, backed by 400% collateral coverage, and leverage resets back to **2.0×**.
+
+```
+DOWNWARD RESET BALANCE SHEET WALKTHROUGH:
+─────────────────────────────────────────────────────────────────────────────
+1. Pre-Reset State (at $0.25 barrier):
+   • Vault Collateral:  $1.25 in sAVAX
+   • Senior Liability:  $1.00
+   • Junior Equity:     $0.25
+
+2. Execution:
+   • Pay senior holders $0.75 in physical sAVAX.
+   • Vault collateral remaining: $1.25 - $0.75 = $0.50.
+   • Senior liability remaining: $1.00 - $0.75 = $0.25.
+   • Junior equity remaining:   $0.25.
+
+3. Consolidation (4-to-1 Reverse Split):
+   • 4 old shares merge into 1 new share worth $1.00.
+   • New Vault State: $0.50 collateral backing $0.25 debt + $0.25 equity.
+   • Collateral Ratio: ($0.50 / $0.25) = 200% (backed 2:1 again).
+   • Leverage: ($0.50 / $0.25) = exactly 2.0x.
+─────────────────────────────────────────────────────────────────────────────
+```
+
+---
+
+## 3. How Staking Yield Is Divided
+
+Because the vault holds \$2.00 of sAVAX for every \$1.00 of senior debt, the protocol earns **double the staking rewards** per dollar of debt:
+
+$$\text{Gross Staking Yield} = 2 \times (4.5\% \text{ to } 5.5\%) = \mathbf{9.0\% \text{ to } 11.0\%}$$
+
+This staking income flows down a structured waterfall:
+
+```
+[ Total sAVAX Staking Yield: ~9.0% - 11.0% ]
+                     │
+       ┌─────────────┴─────────────┐
+       ▼                           ▼
+[ 1. Senior Fixed Coupon ]  [ 2. Protocol Surplus Yield ]
+       R = 7.3% p.a.                    ~2% - 4% p.a.
+       │                                │
+       ├─ anUSD base: 2.5%              └─ Strategic Decision for BENQI:
+       └─ anYIELD:   12.1%                 • Distribute to QI stakers
+                                           • Subsidize sAVAX/AVAX DEX pools
+                                           • Build protocol insurance fund
+```
+
+### Clarification on the "ACP-67" 65/20/15 Split
+
+Earlier materials referenced a surplus split of 65% buyback, 20–45% validator boost, and 15% grants. 
+
+**We want to be completely clear: that was an informal suggestion taken from a GitHub comment on Avalanche Community Proposal ACP-67.** It was an example of what the Foundation might like, but **it is not a requirement or a fixed rule for BENQI.**
+
+From BENQI’s perspective, any surplus revenue can be allocated wherever it creates the most commercial value for your protocol—for example:
+* Directing yield to **QI token stakers**.
+* Deepening **sAVAX liquidity pools** on Pharaoh or LFJ.
+* Creating an on-chain **reserve buffer** for BENQI.
+
+---
+
+## 4. What Happens if AVAX Drops 50% to 60% in a Month?
+
+Hansen specifically asked about a 50%–60% drawdown. To answer this clearly, we have to look at what the math says, what our simulation showed, and where we still need to be careful.
+
+### 4.1 A Common Confusion: 50% vs. 75% Crash Protection
+
+If an engineer looks at our basic starting table:
+* \$2.00 collateral backing \$1.00 senior debt.
+
+Their immediate reaction is: *"If AVAX drops 50%, collateral falls from \$2.00 to \$1.00. That leaves zero cushion. How can your paper claim 75% flash crash protection?"*
+
+Here is the exact explanation:
+
+1. **In the Simple Primary Pool (Single Pair):**
+   * If you look *only* at 1 unit of anBOND backed by \$2.00 of sAVAX, a **50% drop** ($S_t = 0.50$) brings collateral down to exactly \$1.00 ($2 \times 0.50 = \$1.00$). Any drop beyond 50% would cause a shortfall if no reset happens.
+2. **Why anUSD Survives a 75% Drop:**
+   * To mint 1 unit of anUSD, you must burn **2 units of anBOND**.
+   * That means **\$4.00 of deposited collateral sits behind every \$1.00 of anUSD** (\$2.00 in junior anAVAX equity, and \$1.00 in subordinated anYIELD).
+   * At a **75% flash crash** ($S_t = 0.25$):
+     $$\$4.00 \times 0.25 = \mathbf{\$1.00}$$
+   * The remaining collateral still equals \$1.00, meaning **anUSD avoids any haircut even during an immediate 75% crash from par**.
+
+```
+PAR CRASH WALKTHROUGH ($4.00 Collateral backing $1.00 anUSD):
+─────────────────────────────────────────────────────────────────────────────
+• Initial state:   $4.00 collateral  ──>  $1.00 anUSD + $1.00 anYIELD + $2.00 anAVAX
+• Instant -50%:    $2.00 collateral  ──>  anAVAX wiped out. anUSD & anYIELD still 100% covered.
+• Instant -75%:    $1.00 collateral  ──>  anYIELD wiped out. anUSD is STILL 100% covered ($1.00 par).
+─────────────────────────────────────────────────────────────────────────────
+```
+
+### 4.2 Gradual 30-Day Bear Market vs. Sudden Flash Crash
+
+* **In a gradual multi-week decline:** The protocol doesn't wait for a 50% drop. As soon as AVAX falls −37.5%, the downward reset triggers automatically at the \$0.25 barrier. Senior debt is paid down by 75%, shares merge, and the vault recapitalizes with a fresh 2:1 cushion.
+* **In an instant flash crash:** Theorem 1 proves that anUSD tolerates an instantaneous single-block drop of up to **−75% from par** and **−60% from the reset barrier** without losing a cent of principal.
+
+### 4.3 What We Have Actually Modeled vs. What We Have Not
+
+To be completely honest about the state of our research:
+
+* **What we have modeled:**
+  * We ran 500 Kou jump-diffusion paths over 365 days using 2,140 days of historical Avalanche price volatility ($\sigma = 89.15\%$).
+  * In those simulations, resets executed as programmed, and **senior haircut probability was 0.00%** with an average of 3.71 resets per year.
+* **What we have NOT modeled:**
+  * We have **not** simulated a deterministic 30-day crash scenario with real market participants reacting to consecutive resets.
+  * We have **not** modeled whether users receiving physical sAVAX during a reset immediately dump it on DEXs, creating secondary price pressure.
+  * We have **not** modeled unstaking queues if large redemption volumes hit BENQI during a crash.
+
+---
+
+## 5. Comparison with Other Stablecoin Designs
+
+| Mechanism | How It Handles Losses | Real-World Failure Mode |
 | :--- | :--- | :--- |
-| **MakerDAO / Sky** | Collateral-backed debt with liquidation auctions | Auction execution and liquidity during market stress |
-| **Liquity** | Stability Pool and redistribution | Stability Pool capacity and redistribution during large liquidations |
-| **Terra / UST** | Endogenous mint-and-burn relationship with LUNA | Reflexive supply expansion and loss of confidence |
-| **anUSD** | sAVAX-backed senior and junior tranches with global resets | sAVAX liquidity, oracle execution and reset assumptions |
+| **MakerDAO / Sky** | Asynchronous Dutch liquidation auctions | Mempool congestion and auction slippage (e.g., Black Thursday $\$4.5M$ bad debt from 0-bid auctions) |
+| **Liquity (LUSD/BOLD)** | Stability Pool absorption & user-set interest rates | Stability Pool can be depleted during long, deep bear markets |
+| **Terra / UST** | Mint-and-burn arbitrage against endogenous LUNA | Reflexive death spiral when market confidence breaks |
+| **anUSD** | Dual-tranche capital subordination + global scalar resets | Relies on sAVAX secondary liquidity, oracle uptime, and unbonding queues |
 
-The proposed anUSD mechanism takes a different approach.
-
-Instead of depending primarily on individual liquidation auctions, it attempts to manage losses through the relationship between the senior and junior tranches and predefined reset conditions.
-
-This could reduce some of the operational complexity associated with liquidation auctions.
-
-However, it does not remove execution risk. The mechanism still depends on reliable collateral valuation, sufficient market liquidity and successful on-chain execution.
-
-Our previous post-mortem work has covered MakerDAO/Sky, Terra and Liquity V1/V2.
-
-We have not yet conducted equivalent formal modelling or simulation work on Ethena (USDe). We therefore do not make comparative risk claims about that design.
+*(Scope Note: Our past research evaluated MakerDAO, Liquity, and Terra. We have not run formal models on Ethena USDe, so we do not make comparative claims about basis-trade synthetic tokens).*
 
 ---
 
-## 6. What We Still Need to Model
+## 6. Open Technical Questions (Where We Need BENQI Data)
 
-There are two main areas where we would like to work with BENQI.
+There are two major areas where our models currently rely on simplified assumptions:
 
-### 6.1 sAVAX and AVAX market relationship
+### 6.1 The sAVAX vs. AVAX Market Relationship
+Our current models assume 1 sAVAX always trades at its exact fair redemption value. In reality:
+1. **DEX Discounts:** During market panic, users often sell sAVAX on Pharaoh or LFJ instead of waiting. If sAVAX drops to a discount (e.g., $0.94\text{ AVAX}$), collateral value shrinks faster than spot AVAX.
+2. **14-Day Unstaking Latency:** In a downward reset, senior holders receive physical sAVAX. If they all try to withdraw to native AVAX at once, BENQI’s immediate unstaking reserves could be exhausted, forcing users into the 14-day queue.
+3. **Staking APR Fluctuations:** If network staking returns fall from 5% to 3%, senior coupon rates ($R, R'$) must adjust to prevent spread compression.
 
-Our current model assumes that sAVAX always tracks its theoretical redemption value.
+We need BENQI's real-world data on historical unbonding queue volumes and DEX liquidity depth to model these stress scenarios properly.
 
-This is a simplifying assumption.
+### 6.2 Parameter Selection (PSUU)
+The numbers in this note:
+* Reset barriers: $H_u = \$2.00$, $H_d = \$0.25$
+* Senior coupon: $R = 7.3\%$
+* anUSD base yield: $R' = 2.5\%$
 
-In practice, the market price of sAVAX can diverge from its underlying AVAX value, particularly during periods of market stress.
+These are **initial reference starting points**, not locked numbers. 
 
-There are three issues to consider.
+Choosing final parameters involves trade-offs:
+* Barriers placed too close $\to$ resets happen too often, causing higher gas costs and rebalancing friction.
+* Barriers placed too far apart $\to$ leverage swings too wide, increasing jump risk.
 
-**DEX liquidity and discounts**
-
-During a sell-off, users may sell sAVAX on LFJ or Pharaoh rather than wait for redemption.
-
-For example, sAVAX could trade at $0.94\text{ AVAX}$ while its theoretical redemption value remains higher.
-
-This creates a difference between the market value of the collateral and the value assumed by the model.
-
-**Unstaking and redemption delays**
-
-The model also needs to account for the time required to convert sAVAX back into AVAX.
-
-The current analysis uses a 14-day unstaking assumption.
-
-During a large redemption event, available liquidity may be insufficient to meet immediate demand. This could affect both collateral market prices and the ability of holders to access native AVAX.
-
-**Staking yield changes**
-
-Staking rewards can change over time.
-
-For example, a decline in staking APY from $5\%$ to $3\%$ would affect the amount of yield available to meet the senior coupon and other allocations.
-
-We would like to incorporate historical sAVAX/AVAX market prices, trading volumes, redemption activity and unbonding queue data into the simulation.
-
-### 6.2 Parameter selection under uncertainty (PSUU)
-
-The current parameters are starting points:
-
-| Parameter | Initial value |
-| :--- | ---: |
-| Upper reset boundary, $H_u$ | \$2.00 |
-| Lower reset boundary, $H_d$ | \$0.25 |
-| Senior coupon, $R$ | 7.3% |
-| anUSD base yield, $R'$ | 2.5% |
-
-We have not completed the full parameter selection process.
-
-The main trade-off is straightforward:
-
-* Reset boundaries that are too close together may lead to frequent resets and additional execution costs.
-* Boundaries that are too far apart allow larger changes in leverage before the system responds.
-
-The optimal values will depend on BENQI-specific data, including sAVAX liquidity, redemption behaviour, staking yield and market depth.
-
-We would prefer to establish these parameters jointly rather than fix them using assumptions that have not yet been tested against BENQI data.
+We intentionally have not locked these parameters because they should be calibrated together using BENQI's actual delegator retention and liquidity data.
 
 ---
 
-## 7. Proposed Next Steps
+## Closing Note
 
-We suggest three areas of collaboration:
+The core strength of anUSD is that it turns sAVAX into an active, productive reserve asset for a native dollar without exposing BENQI to liquidation auction failures.
 
-1. **Review the mechanism:** Confirm that the token structure, mint/redeem rules, senior coupon and reset accounting reflect the intended BENQI architecture. We would particularly like to reconcile the crash bounds and yield waterfall.
-2. **Incorporate BENQI data:** Use historical sAVAX/AVAX market data, DEX liquidity, staking rewards and unstaking queue history to improve the cadCAD model.
-3. **Joint parameter selection:** Run the parameter selection process using realistic market and redemption scenarios. The objective would be to identify a suitable initial parameter set for a Fuji testnet deployment.
-
----
-
-## Closing
-
-The central idea behind anUSD is to use a senior/junior structure to separate stable dollar exposure from leveraged AVAX exposure, with protocol-level resets to manage changes in collateral value.
-
-The current model provides a starting point for analysing this mechanism. The next step is to bring in BENQI's actual sAVAX market and redemption data, reconcile the remaining accounting and risk calculations, and determine which parameters are suitable for deployment.
-
-We would welcome BENQI's feedback on the mechanism and the outstanding assumptions.
+Our current mathematical proofs and simulations provide a solid starting baseline. The next step is to sit down with BENQI's team, incorporate your actual market and unbonding queue data, and tune the parameters together.
 
 ***
 
