@@ -1,26 +1,24 @@
-# anUSD Technical Due Diligence Memorandum
-## Architectural Specifications, Balance Sheet Equations, and Stress Dynamics
+# anUSD Technical Due Diligence Note
+## Mechanism Mechanics, Balance Sheet Accounting & Downside Dynamics
 
-**To:** BENQI Strategy & Risk Engineering Team  
+**To:** Hansen Niu & BENQI Strategy Team  
 **From:** Bonding Curves Research Group (BCRG)  
 **Date:** November 10, 2026  
-**Reference:** *anUSD Executive Proposal (October 2026)*  
-**Status:** Technical Working Draft
+**Reference:** *anUSD Executive Proposal (shared November 9, 2026)*  
+**Status:** Working Draft
 
 ---
 
 ## 1. Context & Scope
 
-In October 2026, BCRG presented the *anUSD Executive Proposal* to BENQI leadership, introducing a liquid-staked native dollar engine designed to scale sAVAX TVL through four product channels while replacing liquidation auctions with internal vault accounting.
+Following the *anUSD Executive Proposal* shared yesterday, Hansen raised four practical technical questions on Telegram regarding how the mechanism functions under the hood:
 
-During subsequent technical discussions, four core architectural areas were identified for detailed due diligence:
+1. **Tranche Mechanics & Dynamic Leverage:** How mint/redeem rules work, collateral ratios, and how 2.0x leverage is maintained without liquidation auctions.
+2. **Staking Yield Split:** How sAVAX staking rewards are divided between the fixed senior coupon (anBOND), high-yield tranche (anYIELD), and protocol surplus.
+3. **Downside Crash Behavior:** How the vault behaves during a prolonged bear market (e.g., AVAX falling 50%–60% over a month) versus an instantaneous flash crash.
+4. **Comparative Architecture:** How structural risks compare against MakerDAO/Sky, Liquity, and Terra.
 
-1. **Tranche Mechanics & Dynamic Leverage:** The formal mint/redeem rules, collateralization ratios, and mathematical maintenance of 2.0x leverage across market cycles.
-2. **Yield Transmission & Capital Allocation:** The precise waterfall routing consensus staking rewards between senior fixed claims, amplified yield tokens, and protocol surplus.
-3. **Downside Stress Mechanics:** Vault behavior, internal debt amortization, and solvency boundaries during prolonged market contractions (e.g., a 50%–60% monthly decline) and discontinuous flash crashes.
-4. **Comparative Mechanism Architecture:** Structural risk trade-offs relative to debt-auction (MakerDAO/Sky), stability-pool (Liquity), and algorithmic (Terra) paradigms.
-
-This memorandum provides the balance-sheet accounting, formal reset mechanics, and stress-testing specifications addressing these areas, and identifies the open modeling frontiers that require further research.
+This note answers each question directly using straightforward balance-sheet accounting, walks through the numbers step-by-step, and outlines the open modeling questions where further research is needed.
 
 ---
 
@@ -146,7 +144,7 @@ To prevent runaway leverage from creating solvency risk, the contract executes a
 
 ### 2.4 Internal Reset & Rebalancing Mechanics (The Share Splits)
 
-The October 2026 Executive Brief noted that anUSD eliminates auction contagion because *"shares consolidate internally"* during severe drawdowns. Below are the formal balance-sheet mechanics:
+The Executive Proposal noted that anUSD eliminates auction contagion because *"shares consolidate internally"* during severe drawdowns. Below are the formal balance-sheet mechanics:
 
 #### 1. Upward Reset (Triggered when AVAX rises +50%, so anAVAX hits $2.00)
 * **What happens:** Junior equity holders have doubled their money ($V_B = \$2.00$).
@@ -232,7 +230,7 @@ $$\text{Surplus} = 10.0\% - 7.3\% = \mathbf{2.7\% \text{ per dollar of senior de
 
 ### 3.2 Protocol Surplus Governance & Strategic Flexibility
 
-The October 2026 Executive Brief referenced a surplus allocation of 65% buyback and burn, 20%–45% validator security boost, and 15% ecosystem grants.
+The Executive Proposal referenced an illustrative surplus allocation of 65% buyback and burn, 20%–45% validator security boost, and 15% ecosystem grants.
 
 **We clarify that this distribution was modeled on an informal proposal from Avalanche Community Proposal (ACP-67) discussions as an illustrative framework for Avalanche Foundation alignment. It does not represent an architectural constraint or mandate for BENQI.**
 
@@ -250,7 +248,7 @@ A central consideration in evaluating anUSD is system resilience during extreme 
 ### 4.1 Reconciling the 50% Primary Pool Threshold with 75% Par Crash Invariance
 
 A standard review of the initial balance sheet ($2.00 collateral backing $1.00 senior debt) prompts an immediate structural question:
-* *If AVAX drops 50%, collateral contracts from $2.00 to $1.00, exhausting the junior equity buffer. How does the architecture mathematically support Theorem 1's claim of 75% flash crash invariance?*
+* *If AVAX drops 50%, collateral contracts from $2.00 to $1.00, exhausting the junior equity buffer. How does the architecture support the claim of 75% flash crash invariance from the Executive Proposal?*
 
 The resolution lies in the secondary tranche subordination:
 
@@ -356,7 +354,7 @@ Selecting these values involves multi-dimensional trade-offs between capital eff
 | Parameter | Low Setting Trade-Off | High Setting Trade-Off | Dominant Systemic Risk |
 | :--- | :--- | :--- | :--- |
 | **Upper Boundary ($H_u$)** | Triggers frequent forward splits; clips leveraged upside for anAVAX; increases gas overhead and rebalancing friction. | Allows leverage to decay heavily (below 1.5×); suppresses junior equity distributions; reduces capital turnover. | Upside leverage decay vs. execution overhead. |
-| **Lower Boundary ($H_d$)** | High leverage expansion (up to 5×+); increases jump-risk vulnerability if a market discontinuity strikes. | Frequent downward resets; premature debt amortization; user friction and contract rebalancing overhead. | Flash crash haircut risk (Theorem 1 boundary) vs. rebalancing fatigue. |
+| **Lower Boundary ($H_d$)** | High leverage expansion (up to 5×+); increases jump-risk vulnerability if a market discontinuity strikes. | Frequent downward resets; premature debt amortization; user friction and contract rebalancing overhead. | Flash crash haircut risk (75% crash limit) vs. rebalancing fatigue. |
 | **Senior Coupon ($R$)** | Uncompetitive yield for institutional anBOND capital; slow initial TVL scaling. | Compresses protocol surplus; risks negative net carry if base staking APR declines. | Staking spread solvency ($2 \times r_{\text{sAVAX}} > R$). |
 | **anUSD Base Yield ($R'$)** | Lower initial adoption of anUSD as an ecosystem payment and settlement currency. | Depletes the residual coupon captured by anYIELD ($2R - R'$); disincentivizes high-yield capital. | Tranche balance: preserving an attractive spread for both anUSD and anYIELD. |
 | **Debt Amortization ($\gamma$)** | Leaves high residual senior debt in vault; weaker balance-sheet recapitalization post-reset. | Sizable physical sAVAX distributed to users; risks immediate secondary DEX selling pressure. | Balance-sheet deleveraging vs. secondary market sAVAX discount contagion. |
@@ -371,18 +369,18 @@ The seven governing parameters are non-linearly coupled and cannot be calibrated
 * Calibrating $R$ without stochastic modeling of consensus reward fluctuations risks balance-sheet margin compression if network staking yield drops from 5.0% to 3.5%.
 
 To determine safe production parameters, a formal **Parameter Selection Under Uncertainty (PSUU)** simulation pipeline is necessary:
-1. **Admissible Parameter Space:** Define the valid mathematical parameter regions where Theorem 1 flash-crash invariance strictly holds.
+1. **Admissible Parameter Space:** Define the valid parameter regions where the 75% flash-crash invariance strictly holds.
 2. **Stochastic Volatility Sweeps:** Simulate 10,000+ price paths across historical Avalanche volatility ($\sigma \approx 89\%$) and jump regimes.
 3. **Liquidity Feedback Stress Testing:** Evaluate parameter combinations against correlated DEX discounts and P-Chain queue delays.
 4. **Pareto Optimization:** Identify parameter sets that simultaneously minimize senior haircut probability ($\approx 0$), minimize reset churn ($\le 2$–$3$ events per year), and maximize sustainable economic yield for the BENQI ecosystem.
 
 ---
 
-## 7. Status & Technical Availability
+## 7. Current Status & Next Steps
 
-This memorandum summarizes the foundational mechanics and current research findings for the anUSD design in response to preliminary technical review questions. 
+This note provides the technical breakdown of the anUSD mechanism in response to Hansen's questions, along with our preliminary findings and the boundaries of what has been modeled so far.
 
-As BENQI continues its evaluation of the mechanism, BCRG remains available to address further technical questions or discuss the analytical methodology behind these preliminary models.
+As BENQI continues reviewing the design, we are happy to address any follow-up questions, walk through specific numbers, or discuss how we can collaborate on the parameter modeling and stress-testing.
 
 ***
 
