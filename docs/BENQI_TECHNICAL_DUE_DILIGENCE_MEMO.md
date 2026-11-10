@@ -296,7 +296,31 @@ Each parameter represents a multi-dimensional trade-off between capital efficien
 
 ---
 
-### 6.4 Why Rigorous PSUU Optimization Is Required
+### 6.4 Non-Linear Dynamical Systems: Open Stability & Bifurcation Questions
+
+Standard tokenomic models often assume continuous, smooth price adjustments. However, from a formal systems engineering perspective, anUSD is a **piecewise-smooth (PWS) hybrid dynamical system**: the state vector evolves continuously under stochastic market forces within the interior domain, but undergoes **discontinuous jump state transitions** upon encountering the switching borders $\Sigma_u = \{ V_B = H_u \}$ and $\Sigma_d = \{ V_B = H_d \}$.
+
+This inherent non-linearity raises four critical open modeling questions that must be resolved prior to mainnet deployment:
+
+1. **Border-Collision Bifurcations & Chattering Avoidance:**
+   In piecewise-smooth systems, when an orbit collides with a switching boundary, the system Jacobian jumps discontinuously. If the reset parameters ($\gamma, H_d$) are poorly tuned, this jump can trigger a border-collision bifurcation—causing **chattering** (rapid, ping-ponging resets in consecutive blocks that exhaust user gas and protocol liquidity).
+   * *Open Research Question:* How do we formally prove that the post-reset jump mapping is strictly contractive and confines all Floquet multipliers strictly inside the unit circle ($|\mu_i| < 1$)?
+
+2. **Boundary Crisis & Basin of Attraction Preservation:**
+   The target operating state ($\lambda^* = 2.0$, stable peg $P^* = \$1.00$) represents a stable attractor $\mathcal{A}$ situated within a defined **Basin of Attraction** $\mathcal{B}(\mathcal{A})$. In non-linear dynamics, a **Boundary Crisis** occurs when external volatility forces the attractor to collide with the boundary of its basin: $\mathcal{A} \cap \partial \mathcal{B} \ne \emptyset$. Upon collision, the attractor is instantaneously destroyed, resulting in an unrecoverable liquidation death spiral.
+   * *Open Research Question:* What is the exact topological boundary $\partial \mathcal{B}$ in state space under empirical Kou jump-diffusion ($\sigma \approx 89\%$, jump intensity $\lambda_{\text{jump}}$), and what safety margin is required to ensure that prolonged 30-day bear markets do not trigger a boundary crisis?
+
+3. **Discontinuous Saltation Jumps & Secondary DEX Feedback:**
+   At the lower border ($H_d = 0.25$), the transition is governed by a discontinuous saltation jump where senior debt is amortized by fraction $\gamma = 0.75$ in physical sAVAX. If senior holders immediately liquidate this sAVAX on DEXs (Pharaoh, LFJ), this introduces a non-linear velocity feedback vector $\mathbf{f}_+$.
+   * *Open Research Question:* What is the maximum physical sAVAX distribution fraction $\gamma$ that the secondary market can absorb without inducing secondary price slippage that forces an immediate second boundary collision?
+
+4. **Non-Linear Coupling Across the Parameter Vector $\theta$:**
+   The seven governing parameters $\theta = (H_u, H_d, R, R', \gamma, \vec{\omega}, \Delta t)$ do not act independently. Shifting $H_d$ non-linearly alters the required amortization $\gamma$, which in turn reshapes the required staking yield spread ($2R - R'$).
+   * *Open Research Question:* How do we compute the multidimensional stability hypersurface in $\mathbb{R}^7$ that simultaneously guarantees asymptotic Lyapunov stability, minimizes reset churn, and preserves protocol solvency?
+
+---
+
+### 6.5 Why Rigorous PSUU Optimization Is Required
 
 A critical finding from systems engineering and quantitative tokenomics is that **these parameters are non-linearly coupled**. They cannot be calibrated independently or through static spreadsheet heuristics:
 
