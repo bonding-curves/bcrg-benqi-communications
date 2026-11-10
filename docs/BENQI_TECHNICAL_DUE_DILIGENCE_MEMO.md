@@ -263,19 +263,53 @@ Our baseline proofs assume 1 sAVAX redeems at its exact theoretical exchange rat
 2. **Unstaking Queue Latency:** In a downward reset, senior holders receive 75% of their principal in physical sAVAX. If a significant cohort attempts to unbond to native AVAX simultaneously, immediate C-Chain liquidity reserves could be depleted, forcing holders into the 14-day P-Chain unstaking queue. The market impact of this latency requires dedicated modeling.
 3. **Staking APR Volatility:** Network-wide staking yield fluctuates with total staked AVAX and network activity. If the underlying sAVAX staking yield compresses from 5% to 3%, senior coupon rates ($R, R'$) must adapt dynamically to avoid margin compression.
 
-### 6.2 Parameter Selection Under Uncertainty (PSUU)
+### 6.2 The Core Governance Parameter Vector
 
-The numerical values referenced in this note:
-* Reset boundaries: $H_u = 2.00$ (+50% gain), $H_d = 0.25$ (−37.5% drop)
-* Senior coupon: $R = 7.3\%$ p.a.
-* anUSD base yield: $R' = 2.5\%$ p.a.
+The anUSD mechanism is governed by an interconnected vector of seven primary parameters:
 
-These represent **preliminary reference starting points** used for structural illustration, not optimized deployment values.
+$$
+\theta = \left( H_u, \; H_d, \; R, \; R', \; \gamma, \; \vec{\omega}_{\text{surplus}}, \; \Delta t_{\text{oracle}} \right)
+$$
 
-A rigorous multi-variable parameter optimization (PSUU) has not yet been executed. Developing an empirical parameter surface requires modeling several structural trade-offs:
-* **Reset Frequency vs. Execution Cost:** Narrower boundaries reduce leverage drift but trigger resets more frequently (~3.7/year), increasing on-chain execution overhead. Wider boundaries reduce reset frequency (~1–2/year) but allow leverage to expand higher, widening jump risk exposure.
-* **Yield Spread Calibration:** Calibrating the sustainable spread between gross staking cash flow and senior coupons under stochastic staking yield regimes.
-* **Collateral Buffer Sizing:** Sizing the junior equity cushion against correlated market crashes and secondary DEX peg deviations.
+1. **Upper Reset Boundary ($H_u$):** Normalized price threshold triggering junior equity crystallization and 2-for-1 forward split (baseline reference: $2.00$).
+2. **Lower Reset Boundary ($H_d$):** Normalized price threshold triggering senior debt amortization and 4-for-1 reverse split (baseline reference: $0.25$).
+3. **Senior Coupon Rate ($R$):** Annual fixed coupon accrued by the primary anBOND claim (baseline reference: 7.3% p.a.).
+4. **Stablecoin Base Yield ($R'$):** Optional money-market yield distributed to anUSD holders (baseline reference: 2.5% p.a.).
+5. **Senior Debt Amortization Fraction ($\gamma$):** Proportion of senior debt settled in physical sAVAX upon reaching $H_d$ (baseline reference: 0.75).
+6. **Surplus Allocation Vector ($\vec{\omega}_{\text{surplus}}$):** Distribution weights dividing protocol surplus between QI stakers, sAVAX DEX incentives, and risk reserves.
+7. **Oracle Evaluation Cadence ($\Delta t_{\text{oracle}}$):** Maximum allowable heartbeat and staleness window for automated contract state transitions.
+
+---
+
+### 6.3 The Governance Trade-Off Matrix
+
+Each parameter represents a multi-dimensional trade-off between capital efficiency, user friction, and tail-risk solvency. Selecting these values is not a cosmetic choice; it directly determines the stability boundary of the protocol:
+
+| Parameter | Low Setting Trade-Off | High Setting Trade-Off | Dominant Systemic Risk |
+| :--- | :--- | :--- | :--- |
+| **Upper Boundary ($H_u$)** | Triggers frequent forward splits; clips leveraged upside for anAVAX; increases gas overhead and rebalancing friction. | Allows leverage to decay heavily (below 1.5×); suppresses junior equity distributions; reduces capital turnover. | Upside leverage decay vs. execution overhead. |
+| **Lower Boundary ($H_d$)** | High leverage expansion (up to 5×+); increases jump-risk vulnerability if a market discontinuity strikes. | Frequent downward resets; premature debt amortization; user friction and contract rebalancing overhead. | Flash crash haircut risk (Theorem 1 boundary) vs. rebalancing fatigue. |
+| **Senior Coupon ($R$)** | Uncompetitive yield for institutional anBOND capital; slow initial TVL scaling. | Compresses protocol surplus; risks negative net carry if base staking APR declines. | Staking spread solvency ($2 \times r_{\text{sAVAX}} > R$). |
+| **anUSD Base Yield ($R'$)** | Lower initial adoption of anUSD as an ecosystem payment and settlement currency. | Depletes the residual coupon captured by anYIELD ($2R - R'$); disincentivizes high-yield capital. | Tranche balance: preserving an attractive spread for both anUSD and anYIELD. |
+| **Debt Amortization ($\gamma$)** | Leaves high residual senior debt in vault; weaker balance-sheet recapitalization post-reset. | Sizable physical sAVAX distributed to users; risks immediate secondary DEX selling pressure. | Balance-sheet deleveraging vs. secondary market sAVAX discount contagion. |
+| **Surplus Vector ($\vec{\omega}$)** | Directing yield primarily to insurance reserves depresses near-term QI token cash-flow accrual. | High distribution to QI stakers leaves the protocol under-buffered during black-swan liquidity shocks. | Token value accrual vs. long-term balance-sheet resilience. |
+
+---
+
+### 6.4 Why Rigorous PSUU Optimization Is Required
+
+A critical finding from systems engineering and quantitative tokenomics is that **these parameters are non-linearly coupled**. They cannot be calibrated independently or through static spreadsheet heuristics:
+
+* Widening the reset boundaries ($H_d < 0.25$) expands peak leverage, requiring either a higher debt amortization fraction ($\gamma > 0.75$) or an expanded initial equity buffer to maintain flash-crash invariance.
+* Calibrating $R$ without stochastic modeling of consensus reward fluctuations risks balance-sheet margin compression if network staking yield drops from 5.0% to 3.5%.
+* Static spreadsheet models assume deterministic, linear price trajectories and liquid secondary markets. In reality, Avalanche markets exhibit jump-diffusion dynamics ($\sigma \approx 89\%$, Kou double-exponential jumps) and correlated secondary DEX discounts during panics.
+
+To transition anUSD from preliminary mathematical theory to a production-ready protocol, a formal **Parameter Selection Under Uncertainty (PSUU)** optimization pipeline is necessary:
+
+1. **Coupled Admissible Space Formulation:** Define the mathematical domain in $\mathbb{R}^7$ where solvency invariants (Theorem 1 par crash invariance) hold strictly.
+2. **High-Dimensional Monte Carlo Simulation:** Execute 10,000+ stochastic multi-agent simulation paths under historical volatility ($\sigma = 89.15\%$) and jump regimes.
+3. **Correlated Liquidity Shock Modeling:** Stress-test parameter vectors against correlated secondary DEX discounts (e.g., sAVAX trading at a 4%–10% discount on LFJ/Pharaoh) and 14-day P-Chain unstaking queue bottlenecks.
+4. **Multi-Objective Pareto Frontier Optimization:** Identify parameter sets that simultaneously minimize senior haircut probability ($\mathbb{P}(\text{haircut}) \approx 0$), minimize reset churn ($\le 2$–$3$ events per year), and maximize sustainable economic yield for the BENQI ecosystem.
 
 ---
 
