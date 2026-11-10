@@ -1,5 +1,5 @@
 # anUSD Technical Due Diligence Memorandum
-## Architectural Specifications, Formal Accounting Equations, and Stress Dynamics
+## Architectural Specifications, Balance Sheet Equations, and Stress Dynamics
 
 **To:** BENQI Strategy & Risk Engineering Team  
 **From:** Bonding Curves Research Group (BCRG)  
@@ -24,88 +24,101 @@ This memorandum provides the balance-sheet accounting, formal reset mechanics, a
 
 ---
 
-## 2. Vault Architecture & Formal Accounting Equations
+## 2. Vault Architecture & Balance Sheet Equations
 
-### 2.1 Collateral Decomposition & Balance Sheet Equations
+### 2.1 The Core Balance Sheet: Senior Debt vs. Junior Equity
 
-Rather than issuing debt against volatile collateral through an isolated Collateralized Debt Position (CDP) subject to third-party liquidation auctions, anUSD pools deposited sAVAX and partitions the aggregate claims into two complementary tranches against the underlying reserve:
+Rather than borrowing against collateral in a CDP and risking auction liquidation, anUSD pools deposited sAVAX and divides the pool into two complementary claims:
 
 ```
-[ sAVAX Collateral Deposited in Vault: $200 ]
-                     │
-       ┌─────────────┴─────────────┐
-       ▼                           ▼
-[ Senior Claim: anBOND ]    [ Junior Equity: anAVAX ]
-         $100                        $100
-  • Capital preservation      • Subordinated first-loss
-  • Fixed coupon claim        • Absorbs collateral volatility
-    (e.g., R = 7.3% p.a.)      • Exactly 2.0x initial leverage
-                                ($100 equity controls $200 collateral)
+[ Vault Deposits: $200 of sAVAX ]
+               │
+   ┌───────────┴───────────┐
+   ▼                       ▼
+[ anBOND: Senior Debt ]  [ anAVAX: Junior Equity ]
+        $100                    $100
+ • Fixed claim: $1.00     • Absorbs all price swings
+ • Earns 7.3% coupon      • Starts with 2.0x leverage
+                          ($100 equity controls $200 collateral)
 ```
 
-The underlying mechanics are defined by four foundational balance-sheet equations:
+The vault accounting follows four foundational rules:
 
 1. **Total Collateral Value ($C_t$):**  
-   Let $S_t = P_{\text{AVAX}}(t) / P_{\text{AVAX}}(0)$ denote the normalized AVAX spot price index ($S_0 = 1.00$). For an initial vault deposit of $2.00 of sAVAX:
-   $$C_t = 2.00 \cdot S_t$$
+   The vault holds twice as much collateral as the initial senior debt:
 
-2. **Senior Contractual Debt ($V_A(t)$):**  
-   The senior tranche (anBOND) represents a preferred debt claim that accrues at annual coupon rate $R$:
-   $$V_A(t) = 1.00 \cdot (1 + R \cdot t)$$
-   At epoch inception ($t = 0$), $V_A(0) = \$1.00$.
+   $$C_t = 2.00 \times S_t$$
 
-3. **Junior Equity Value ($V_B(t)$):**  
-   The junior tranche (anAVAX) represents the residual collateral value after senior debt obligations are accounted for:
-   $$V_B(t) = C_t - V_A(t) = 2.00 \cdot S_t - V_A(t)$$
+   *What this means:* Let $S_t$ be the AVAX price index (normalized to $1.00 at the start of an epoch). If AVAX starts at $1.00, the vault holds $2.00 of sAVAX collateral. If AVAX rises 50% to $1.50, the collateral is worth $3.00. If AVAX drops 37.5% to $0.625, collateral drops to $1.25.
 
-4. **Dynamic Junior Leverage ($\lambda_t$):**  
-   Effective junior leverage is defined as the ratio of gross collateral to junior equity:
-   $$\lambda_t = \frac{C_t}{V_B(t)} = \frac{2.00 \cdot S_t}{2.00 \cdot S_t - V_A(t)}$$
-   At inception ($S_0 = 1.00, V_A(0) = \$1.00$):
-   $$\lambda_0 = \frac{2.00}{2.00 - 1.00} = \mathbf{2.0\times}$$
+2. **Senior Debt Claim ($V_A$):**  
+   The senior tranche (anBOND) has a priority claim that starts at par and earns a contractual coupon $R$ (modeled at 7.3% p.a.):
+
+   $$V_A = 1.00 \text{ USD}$$
+
+   *What this means:* Regardless of whether AVAX goes up or down, senior holders are owed their fixed $1.00 principal plus accrued interest.
+
+3. **Junior Equity Claim ($V_B$):**  
+   The junior tranche (anAVAX) absorbs whatever collateral remains after paying the senior claim:
+
+   $$V_B = C_t - V_A = 2.00 \times S_t - 1.00$$
+
+   *What this means:* Because the senior claim stays fixed at $1.00, any gain or loss on the underlying collateral flows 100% into junior equity:
+   * If collateral rises to $3.00, junior equity doubles to: $3.00 - 1.00 = \mathbf{\$2.00}$.
+   * If collateral falls to $1.25, junior equity shrinks to: $1.25 - 1.00 = \mathbf{\$0.25}$.
+
+4. **Dynamic Junior Leverage ($\lambda$):**  
+   Effective leverage is the ratio of gross collateral to junior equity:
+
+   $$\lambda = \frac{C_t}{V_B} = \frac{2.00 \times S_t}{2.00 \times S_t - 1.00}$$
+
+   *What this means:*
+   * **At inception:** $\$2.00 \text{ collateral} / \$1.00 \text{ equity} = \mathbf{2.0\times \text{ leverage}}$.
+   * **When AVAX rises 50%:** $\$3.00 \text{ collateral} / \$2.00 \text{ equity} = \mathbf{1.5\times \text{ leverage}}$ (leverage naturally decays as equity grows).
+   * **When AVAX falls 37.5%:** $\$1.25 \text{ collateral} / \$0.25 \text{ equity} = \mathbf{5.0\times \text{ leverage}}$ (leverage expands as equity shrinks).
 
 ---
 
 ### 2.2 Secondary Tranche Subordination: anUSD and anYIELD
 
-Because anBOND accrues coupon value over time, its terminal redemption value drifts above par (e.g., $1.01, $1.02). To establish a stable, unit-pegged currency suitable for payments and treasury operations, anBOND is partitioned into a secondary tranche pair:
+Because anBOND accrues coupon interest over time, its value naturally drifts above $1.00 (to $1.01, $1.02, etc.). To create a stable, unit-pegged currency for payments and treasury reserves, anBOND is partitioned into two tokens:
 
 ```
-                 [ 2 Units of anBOND ($2.00 par) ]
+              [ 2 Units of anBOND ($2.00 total par) ]
                                 │
                  ┌──────────────┴──────────────┐
                  ▼                             ▼
        [ anUSD Stablecoin ]           [ anYIELD High-Yield ]
              $1.00 par                      $1.00 par
-       • Non-volatile $1.00 peg       • Concentrated residual coupon
-       • Optional base rate R'        • Yield formula: R_anYIELD = 2R - R'
-         (e.g., 2.5% p.a.)
+       • Pegged at $1.00              • Collects concentrated coupon
+       • Optional base yield R'       • Formula: R_anYIELD = 2R - R'
+         (e.g., 2.5% p.a.)              (e.g., 12.1% p.a.)
 ```
 
-The secondary conversion rules enforce two conservation laws:
+The secondary tranche conversion follows two conservation rules:
 
-* **Par Conservation Rule:**
-  $$P_{\text{anUSD}} + P_{\text{anYIELD}} = 2 \cdot P_{\text{anBOND}} = \$2.00$$
-* **Coupon Transmission Rule:**
-  $$R_{\text{anYIELD}} = 2R - R'$$
-  At baseline reference rates ($R = 7.3\%$ and $R' = 2.5\%$ p.a.), the resulting yield on anYIELD evaluates to:
-  $$R_{\text{anYIELD}} = 2(7.3\%) - 2.5\% = \mathbf{12.1\% \text{ p.a.}}$$
+1. **Value Conservation Rule (Par Invariance):**  
+
+   $$P_{\text{anUSD}} + P_{\text{anYIELD}} = 2 \times P_{\text{anBOND}} = 2.00 \text{ USD}$$
+
+   *What this means:* The two tokens together always equal the value of the 2 locked anBOND units ($1.00 + $1.00 = $2.00).
+
+2. **Yield Concentration Rule:**  
+
+   $$R_{\text{anYIELD}} = 2R - R'$$
+
+   *What this means:* The 2 units of anBOND generate $2 \times 7.3\% = 14.6\%$ in total annual coupon income. If anUSD pays out a 2.5% base money-market yield to holders, the remaining yield flows entirely to anYIELD:
+   $$14.6\% - 2.5\% = \mathbf{12.1\% \text{ p.a.}}$$
 
 **Minting and Redemption Conversion Rules:**
-* **Issuance (Mint):** Locking **2 units of anBOND** mints **1 unit of anUSD + 1 unit of anYIELD**.
-* **Settlement (Redeem):** Surrendering **1 unit of anUSD + 1 unit of anYIELD** redeems **2 units of anBOND**.
-
-*(Accounting Note: Final technical specifications must confirm whether the 2:1 ratio is enforced strictly in unit quantities or dollar-equivalent nominal value, ensuring strict value conservation across multi-epoch operations).*
+* **To Mint:** Lock **2 units of anBOND** to mint **1 unit of anUSD + 1 unit of anYIELD**.
+* **To Redeem:** Burn **1 unit of anUSD + 1 unit of anYIELD** together to unlock **2 units of anBOND**.
 
 ---
 
 ### 2.3 Dynamic Leverage Evolution Across Price Trajectories
 
-Leverage in the junior tranche is dynamic; it responds continuously to underlying collateral value:
-
-$$\lambda_t = \frac{C_t}{V_B(t)}$$
-
-Assuming an initial state of $2.00 in sAVAX collateral supporting $1.00 of senior debt and $1.00 of junior equity:
+Leverage in the junior tranche is not static; it moves continuously with the market:
 
 ```
    AVAX Drops -37.5%                      Initial State                        AVAX Rises +50%
@@ -119,37 +132,45 @@ Assuming an initial state of $2.00 in sAVAX collateral supporting $1.00 of senio
   [Triggers Downward Reset]                                           [Triggers Upward Reset]
 ```
 
-* **When AVAX Rises +50% ($S_t = 1.50$):** Collateral value expands to $3.00. The senior claim remains $1.00, increasing junior equity to $2.00. Effective leverage naturally compresses:
-  $$\lambda = \frac{\$3.00}{\$2.00} = \mathbf{1.5\times}$$
-* **When AVAX Drops −37.5% ($S_t = 0.625$):** Collateral contracts to $1.25. Subtracting the $1.00 senior claim leaves $0.25 in junior equity. Effective leverage expands:
-  $$\lambda = \frac{\$1.25}{\$0.25} = \mathbf{5.0\times}$$
+* **When AVAX Rises +50% ($S_t = 1.50$):** Collateral value expands to 3.00 USD. Senior debt remains 1.00 USD, so junior equity doubles to 2.00 USD. Effective leverage naturally compresses:
 
-To bound leverage expansion and protect senior solvency without liquidation auctions, the protocol executes automated, deterministic balance-sheet resets at predefined price barriers.
+  $$\lambda = \frac{3.00}{2.00} = \mathbf{1.5\times}$$
+
+* **When AVAX Drops −37.5% ($S_t = 0.625$):** Collateral contracts to 1.25 USD. Subtracting the 1.00 USD senior claim leaves 0.25 USD in junior equity. Effective leverage expands:
+
+  $$\lambda = \frac{1.25}{0.25} = \mathbf{5.0\times}$$
+
+To prevent runaway leverage from creating solvency risk, the contract executes automated resets whenever junior equity reaches predefined boundaries.
 
 ---
 
 ### 2.4 Internal Reset & Rebalancing Mechanics (The Share Splits)
 
-The October 2026 Executive Brief noted that anUSD provides contagion protection because *"shares consolidate internally"* during severe drawdowns. Below are the formal balance-sheet mechanics:
+The October 2026 Executive Brief noted that anUSD eliminates auction contagion because *"shares consolidate internally"* during severe drawdowns. Below are the formal balance-sheet mechanics:
 
-#### 1. Upward Reset (Triggered at $V_B \ge H_u = \$2.00$ / +50% AVAX Gain)
-* **Objective:** Realize accumulated equity gains and restore the junior tranche to target 2.0× leverage.
-* **Mechanism:** 
-  1. The protocol crystallizes junior capital gains of $\$1.00$ per share ($\Delta \Pi = V_B - 1.00 = \$1.00$) and distributes it directly to junior holders in physical sAVAX.
-  2. The contract executes a **2-for-1 forward share split**:
-     $$N_{\text{new}} = 2 \cdot N_{\text{old}}, \quad V_B^{\text{new}} = \$1.00$$
-* **Result:** System leverage cleanly recalibrates to $\lambda = \frac{\$2.00}{\$1.00} = \mathbf{2.0\times}$.
+#### 1. Upward Reset (Triggered when AVAX rises +50%, so anAVAX hits $2.00)
+* **What happens:** Junior equity holders have doubled their money ($V_B = \$2.00$).
+* **The Math:**
+  1. **Profit Distribution:** The contract crystallizes the $1.00 profit per share and distributes it directly to junior holders in physical sAVAX.
+  2. **Forward Split (2-for-1):** The contract executes a 2-for-1 forward share split, doubling total shares and restoring each share's price back to $1.00.
+  3. **New Leverage:** With $2.00 of collateral and $1.00 of equity, leverage resets cleanly back to $\mathbf{2.0\times}$.
 
-#### 2. Downward Reset (Triggered at $V_B \le H_d = \$0.25$ / −37.5% AVAX Drop)
-* **Objective:** Eliminate junior leverage blowout, amortize senior liabilities, and restore balance-sheet collateralization prior to any senior capital impairment.
-* **Mechanism:**
-  1. **Senior Debt Amortization:** The contract automatically pays senior holders **$0.75 of their $1.00 claim directly in physical sAVAX**, extinguishing 75% of protocol liabilities:
-     $$V_A^{\text{rem}} = \$1.00 - \$0.75 = \$0.25$$
-     $$C^{\text{rem}} = \$1.25 - \$0.75 = \$0.50$$
-  2. **Capital Consolidation (4-for-1 Reverse Split):** The remaining $0.25 senior claim and $0.25 junior equity claim merge via an internal 4-for-1 reverse split ($k = 4$):
-     $$N_{\text{new}} = \frac{N_{\text{old}}}{4}, \quad V_A^{\text{new}} = \$1.00, \quad V_B^{\text{new}} = \$1.00$$
-* **Result:** Total liabilities are compressed by 75%, collateralization restores to 200%, and leverage resets to **2.0×**:
-  $$CR_{\text{new}} = \frac{C^{\text{rem}}}{V_A^{\text{rem}}} = \frac{\$0.50}{\$0.25} = 200\% \implies \lambda_{\text{new}} = \frac{\$0.50}{\$0.25} = \mathbf{2.0\times}$$
+#### 2. Downward Reset (Triggered when AVAX drops −37.5%, so anAVAX hits $0.25)
+* **What happens:** Junior equity has shrunk to 25 cents. The contract steps in to protect senior debt *before* market losses can touch it.
+* **The Math:**
+  1. **Senior Debt Amortization:** The contract automatically pays senior holders 75 cents of their 1.00 USD claim directly in physical sAVAX, extinguishing 75% of protocol liabilities:
+
+     $$\text{Remaining Senior Debt} = 1.00 - 0.75 = 0.25 \text{ USD}$$
+
+     $$\text{Remaining Vault Collateral} = 1.25 - 0.75 = 0.50 \text{ USD}$$
+
+  2. **Capital Consolidation (4-for-1 Reverse Split):** The remaining 25 cents of debt and 25 cents of equity merge via a 4-to-1 reverse split (4 old shares merge into 1 new share worth 1.00 USD).
+  3. **New Leverage & Collateral Ratio:**
+
+     $$\text{Collateral Ratio} = \frac{0.50 \text{ Collateral}}{0.25 \text{ Debt}} = \mathbf{200\%}$$
+
+     $$\text{Leverage} = \frac{0.50 \text{ Collateral}}{0.25 \text{ Equity}} = \mathbf{2.0\times}$$
+  *What this means:* The protocol has eliminated 75% of its debt, restored a 200% collateral cushion, and reset leverage back to 2.0×—all through internal accounting, without selling a single token in a liquidation auction.
 
 ```
 DOWNWARD RESET BALANCE SHEET WALKTHROUGH:
@@ -179,20 +200,21 @@ DOWNWARD RESET BALANCE SHEET WALKTHROUGH:
 
 ### 3.1 Gross Consensus Yield & Surplus Equations
 
-Because $2.00 of sAVAX collateral is pledged for every $1.00 of senior debt, the protocol captures consensus staking yield on **twice the notional debt base**:
+Because the vault holds $2.00 of sAVAX collateral for every $1.00 of senior debt, the protocol captures consensus staking yield on **twice the notional debt base**:
 
-$$\text{Gross Staking Yield} = 2.00 \cdot r_{\text{sAVAX}}$$
+$$\text{Gross Staking Yield} = 2.00 \times r_{\text{sAVAX}}$$
 
-For an illustrative sAVAX consensus reward rate of $r_{\text{sAVAX}}$ between 4.5% and 5.5% p.a., gross cash flow across the collateral base equals **9.0% to 11.0% p.a.** relative to senior notional debt.
+*What this means:* If sAVAX consensus staking earns 5.0% p.a., the vault generates:
+$$2 \times 5.0\% = \mathbf{10.0\% \text{ gross annual yield}}$$
 
-The protocol surplus cash flow per dollar of senior debt is defined as:
+The protocol surplus is whatever staking yield remains after paying the senior coupon $R$:
 
-$$\Pi_{\text{surplus}} = 2.00 \cdot r_{\text{sAVAX}} - R$$
+$$\text{Protocol Surplus} = \text{Gross Staking Yield} - R$$
 
-For $r_{\text{sAVAX}} = 5.0\%$ and $R = 7.3\%$:
-$$\Pi_{\text{surplus}} = 2(5.0\%) - 7.3\% = \mathbf{2.7\% \text{ per dollar of senior debt}}$$
+Using our baseline coupon of $R = 7.3\%$ p.a.:
+$$\text{Surplus} = 10.0\% - 7.3\% = \mathbf{2.7\% \text{ per dollar of senior debt}}$$
 
-This cash flow feeds a transparent, structured yield transmission waterfall:
+*What this means:* On a $100M anUSD vault, the protocol generates **$2.7M annually in surplus cash flow** that BENQI governance can allocate.
 
 ```
 [ Gross sAVAX Staking Cash Flow: ~9.0% - 11.0% ]
@@ -233,14 +255,18 @@ A standard review of the initial balance sheet ($2.00 collateral backing $1.00 s
 The resolution lies in the secondary tranche subordination:
 
 1. **Primary Tranche Limit (Single Pair):**
-   * Evaluating 1 unit of anBOND backed by $2.00 of sAVAX in isolation, a **50% drop** ($S_t = 0.50$) brings collateral to parity with debt:
-     $$\text{Collateral Remaining} = 2.00 \times 0.50 = 1.00\text{ USD}$$
+   * Evaluating 1 unit of anBOND backed by $2.00 of sAVAX in isolation, a **50% drop** brings collateral down to parity with debt:
+
+     $$\text{Collateral Remaining} = 2.00 \times 0.50 = 1.00 \text{ USD}$$
+
      Any decline exceeding 50% absent a reset impairs the primary debt tranche.
 2. **Secondary Tranche Subordination (anUSD Invariance):**
    * Minting 1 unit of anUSD requires locking **2 units of anBOND**.
    * Consequently, **$4.00 of gross collateral supports every $1.00 of issued anUSD** ($2.00 in junior anAVAX equity, and $1.00 in subordinated anYIELD).
-   * In an instantaneous **75% flash crash** ($S_t = 0.25$):
-     $$\text{Collateral Remaining} = 4.00 \times 0.25 = 1.00\text{ USD}$$
+   * In an instantaneous **75% flash crash** (AVAX index drops to $0.25):
+
+     $$\text{Collateral Remaining} = 4.00 \times 0.25 = 1.00 \text{ USD}$$
+
    * Collateral remains exactly equal to $1.00 per unit of anUSD. Therefore, **anUSD sustains an instantaneous 75% market drop from par with zero haircut to principal**.
 
 ```
@@ -255,7 +281,7 @@ PAR CRASH SUBORDINATION WALKTHROUGH ($4.00 Gross Collateral backing $1.00 anUSD)
 ### 4.2 Multi-Week Bear Market Dynamics (30-Day 50%–60% Drawdown)
 
 In a progressive multi-week contraction (e.g., AVAX declining 50%–60% over 30 days):
-* The protocol does not wait for equity exhaustion. Upon reaching the $H_d = 0.25$ threshold (−37.5% drop), the downward reset executes deterministically.
+* The protocol does not wait for equity exhaustion. Upon reaching the $0.25 barrier (−37.5% drop), the downward reset executes deterministically.
 * 75% of senior liabilities are amortized in physical sAVAX, the remaining capital base is consolidated via the 4:1 reverse split, and the vault enters the next market phase with fresh 200% collateral coverage and 2.0× leverage.
 * Successive market drops trigger sequential resets, maintaining senior coverage across extended bear regimes.
 
@@ -294,15 +320,15 @@ While the baseline balance-sheet equations and jump-diffusion boundaries are ver
 
 Our baseline balance-sheet equations assume 1 sAVAX can always be redeemed or liquidated for its exact theoretical value. In reality:
 * During sharp market crashes, users frequently sell sAVAX directly on secondary DEXs (Pharaoh, LFJ) rather than waiting for unstaking queues.
-* If sAVAX trades at a 4%–6% secondary discount (e.g. trading at $0.94\text{ AVAX}$), effective vault collateral value contracts faster than spot AVAX, compressing the equity cushion.
+* If sAVAX trades at a 4%–6% secondary discount (e.g. trading at 0.94 AVAX), effective vault collateral value contracts faster than spot AVAX, compressing the equity cushion.
 * *Open Modeling Question:* Does the $0.25 junior equity buffer remain thick enough to protect senior debt if a 37.5% spot price drop coincides with a 6% secondary DEX discount?
 
 ### 6.2 Preventing "Ping-Pong" Resets (Secondary Selling Pressure Feedback)
 
-In a downward reset, the protocol pays out $0.75 of physical sAVAX per token to senior holders.
+In a downward reset, the protocol pays out 75 cents of physical sAVAX per token to senior holders.
 * If those senior holders immediately turn around and sell their sAVAX on DEXs to obtain cash, that selling pressure could push AVAX market prices down further.
 * If this secondary market impact is large, it could trigger a second downward reset shortly after the first.
-* *Open Modeling Question:* How large can the physical payout fraction ($\gamma$) be without triggering secondary price pressure that causes repeated, ping-ponging resets?
+* *Open Modeling Question:* How large can the physical payout fraction be without triggering secondary price pressure that causes repeated, ping-ponging resets?
 
 ### 6.3 14-Day P-Chain Unstaking Queue vs. Instant Reserves
 
@@ -317,7 +343,13 @@ BENQI maintains an instant unstaking pool on C-Chain to save users from the 14-d
 
 The mechanism is governed by seven interconnected parameters:
 
-$$\theta = \left( H_u, \; H_d, \; R, \; R', \; \gamma, \; \vec{\omega}_{\text{surplus}}, \; \Delta t_{\text{oracle}} \right)$$
+1. **Upper Reset Barrier ($H_u = 2.00$):** Price barrier triggering equity payout and forward split (+50% AVAX gain).
+2. **Lower Reset Barrier ($H_d = 0.25$):** Price barrier triggering debt amortization and reverse split (−37.5% AVAX drop).
+3. **Senior Coupon ($R = 7.3\%$ p.a.):** Annual fixed interest accrued by anBOND.
+4. **Stablecoin Base Yield ($R' = 2.5\%$ p.a.):** Optional yield distributed to anUSD holders.
+5. **Senior Debt Payout Fraction ($\gamma = 0.75$):** Percentage of debt paid out in physical sAVAX at $H_d$.
+6. **Surplus Allocation Vector ($\vec{\omega}$):** Split between $QI stakers, DEX liquidity, and protocol risk reserves.
+7. **Oracle Evaluation Cadence ($\Delta t$):** Maximum staleness and update window for automated resets.
 
 Selecting these values involves multi-dimensional trade-offs between capital efficiency, user friction, and tail-risk solvency:
 
@@ -325,7 +357,7 @@ Selecting these values involves multi-dimensional trade-offs between capital eff
 | :--- | :--- | :--- | :--- |
 | **Upper Boundary ($H_u$)** | Triggers frequent forward splits; clips leveraged upside for anAVAX; increases gas overhead and rebalancing friction. | Allows leverage to decay heavily (below 1.5×); suppresses junior equity distributions; reduces capital turnover. | Upside leverage decay vs. execution overhead. |
 | **Lower Boundary ($H_d$)** | High leverage expansion (up to 5×+); increases jump-risk vulnerability if a market discontinuity strikes. | Frequent downward resets; premature debt amortization; user friction and contract rebalancing overhead. | Flash crash haircut risk (Theorem 1 boundary) vs. rebalancing fatigue. |
-| **Senior Coupon ($R$)** | Uncompetitive yield for institutional anBOND capital; slow initial TVL scaling. | Compresses protocol surplus; risks negative net carry if base staking APR declines. | Staking spread solvency ($2 \cdot r_{\text{sAVAX}} > R$). |
+| **Senior Coupon ($R$)** | Uncompetitive yield for institutional anBOND capital; slow initial TVL scaling. | Compresses protocol surplus; risks negative net carry if base staking APR declines. | Staking spread solvency ($2 \times r_{\text{sAVAX}} > R$). |
 | **anUSD Base Yield ($R'$)** | Lower initial adoption of anUSD as an ecosystem payment and settlement currency. | Depletes the residual coupon captured by anYIELD ($2R - R'$); disincentivizes high-yield capital. | Tranche balance: preserving an attractive spread for both anUSD and anYIELD. |
 | **Debt Amortization ($\gamma$)** | Leaves high residual senior debt in vault; weaker balance-sheet recapitalization post-reset. | Sizable physical sAVAX distributed to users; risks immediate secondary DEX selling pressure. | Balance-sheet deleveraging vs. secondary market sAVAX discount contagion. |
 | **Surplus Vector ($\vec{\omega}$)** | Directing yield primarily to insurance reserves depresses near-term QI token cash-flow accrual. | High distribution to QI stakers leaves the protocol under-buffered during black-swan liquidity shocks. | Token value accrual vs. long-term balance-sheet resilience. |
@@ -335,7 +367,7 @@ Selecting these values involves multi-dimensional trade-offs between capital eff
 ### 6.5 Parameter Optimization (PSUU)
 
 The seven governing parameters are non-linearly coupled and cannot be calibrated through static spreadsheet models:
-* Widening reset boundaries ($H_d < 0.25$) expands peak leverage, requiring either a higher debt amortization fraction ($\gamma > 0.75$) or a higher equity buffer to maintain flash-crash invariance.
+* Widening reset boundaries ($H_d < 0.25$) expands peak leverage, requiring either a higher debt amortization fraction or a higher initial equity buffer to maintain flash-crash invariance.
 * Calibrating $R$ without stochastic modeling of consensus reward fluctuations risks balance-sheet margin compression if network staking yield drops from 5.0% to 3.5%.
 
 To determine safe production parameters, a formal **Parameter Selection Under Uncertainty (PSUU)** simulation pipeline is necessary:
