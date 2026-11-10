@@ -79,9 +79,15 @@ Effective leverage is the ratio of gross collateral to junior equity:
 $$\Large \displaystyle \lambda = \frac{C_t}{V_B} = \frac{2.00 \times S_t}{2.00 \times S_t - 1.00}$$
 
 *What this means:*
-* **At inception:** 2.00 USD collateral / 1.00 USD equity = **2.0× leverage**.
-* **When AVAX rises 50%:** 3.00 USD collateral / 2.00 USD equity = **1.5× leverage** (leverage naturally decays as equity grows).
-* **When AVAX falls 37.5%:** 1.25 USD collateral / 0.25 USD equity = **5.0× leverage** (leverage expands as equity shrinks).
+* **At inception ($S_t = 1.00$):** 2.00 USD collateral / 1.00 USD equity = **2.0× target leverage**.
+* **When AVAX rises +50% ($S_t = 1.50$):** 3.00 USD collateral / 2.00 USD equity = **1.5× leverage** (leverage naturally compresses as equity grows).
+* **When AVAX falls −37.5% ($S_t = 0.625$):** 1.25 USD collateral / 0.25 USD equity = **5.0× leverage ceiling** (leverage expands as equity shrinks).
+
+*Clarification on Target Leverage vs. Dynamic Operating Band:*
+* **anAVAX is a Target 2.0× Leveraged Tranche:** It starts at 2.0× and resets back to 2.0× after every rebalancing event.
+* **Why Leverage Floats:** Unlike centralized perpetuals or ETF tokens that trade on DEXs daily (suffering severe volatility drag and dumping collateral into the market), anUSD avoids continuous rebalancing costs. Because senior debt is fixed at 1.00 USD, junior equity absorbs price movements directly.
+* **5.0× is the Safety Tripwire, NOT the Product Identity:** 5.0× represents the maximum allowable leverage ceiling under the baseline academic parameter ($H_d = 0.25$). The moment leverage hits 5.0×, the contract steps in automatically to amortize debt and reset leverage back to 2.0×.
+* **Governance Modularity:** The 5.0× ceiling is fully configurable. If BENQI prefers anAVAX to stay closer to 2.0× at all times, governance can set $H_d = 0.50$ (triggered after a −25% drop), which caps maximum leverage at **3.0×**.
 
 ---
 
@@ -129,7 +135,7 @@ $$\Large \displaystyle 14.6\% - 2.5\% = \mathbf{12.1\% \text{ p.a.}}$$
 
 ### 2.3 Dynamic Leverage Evolution Across Price Trajectories
 
-Leverage in the junior tranche is not static; it moves continuously with the market:
+Leverage in the junior tranche is not a fixed perp; it moves continuously inside a bounded band:
 
 ```
    AVAX Drops -37.5%                      Initial State                        AVAX Rises +50%
@@ -138,20 +144,20 @@ Leverage in the junior tranche is not static; it moves continuously with the mar
 • Senior Claim:        $1.00           • Senior Claim: $1.00        • Senior Claim:        $1.00
 • Junior Equity:       $0.25           • Junior Equity: $1.00       • Junior Equity:       $2.00
 ─────────────────────────────────      ───────────────────────      ─────────────────────────────────
-▶ LEVERAGE RISES TO:   5.0x            ▶ LEVERAGE IS: 2.0x          ▶ LEVERAGE DECAYS TO:  1.5x
+▶ LEVERAGE REACHES CEILING: 5.0x       ▶ TARGET LEVERAGE: 2.0x      ▶ LEVERAGE COMPRESSES: 1.5x
   ($1.25 / $0.25)                        ($2.00 / $1.00)              ($3.00 / $2.00)
-  [Triggers Downward Reset]                                           [Triggers Upward Reset]
+  [Downward Reset: Resets to 2.0x]                                    [Upward Reset: Resets to 2.0x]
 ```
 
 * **When AVAX Rises +50% ($S_t = 1.50$):** Collateral value expands to 3.00 USD. Senior debt remains 1.00 USD, so junior equity doubles to 2.00 USD. Effective leverage naturally compresses:
 
 $$\Large \displaystyle \lambda = \frac{3.00}{2.00} = \mathbf{1.5\times}$$
 
-* **When AVAX Drops −37.5% ($S_t = 0.625$):** Collateral contracts to 1.25 USD. Subtracting the 1.00 USD senior claim leaves 0.25 USD in junior equity. Effective leverage expands:
+* **When AVAX Drops −37.5% ($S_t = 0.625$):** Collateral contracts to 1.25 USD. Subtracting the 1.00 USD senior claim leaves 0.25 USD in junior equity. Effective leverage expands toward the safety ceiling:
 
 $$\Large \displaystyle \lambda = \frac{1.25}{0.25} = \mathbf{5.0\times}$$
 
-To prevent runaway leverage from creating solvency risk, the contract executes automated resets whenever junior equity reaches predefined boundaries.
+To prevent runaway leverage beyond 5.0×, the contract executes the downward reset at the 0.25 equity barrier, recapitalizing the pool and restoring leverage cleanly back to 2.0×.
 
 ---
 
@@ -229,6 +235,8 @@ Using our baseline coupon of $R = 7.3\%$ p.a.:
 $$\Large \displaystyle \text{Surplus} = 10.0\% - 7.3\% = \mathbf{2.7\% \text{ per dollar of senior debt}}$$
 
 *What this means:* On a $100M anUSD vault, the protocol generates **$2.7M annually in surplus cash flow** that BENQI governance can allocate.
+
+*Note on Coupon Governance:* While 7.3% p.a. is modeled as the baseline coupon from literature, in production governance $R$ can be dynamically indexed to consensus staking yields (e.g. $R \le 1.4 \times r_{\text{sAVAX}}$) to ensure the vault always maintains positive net carry.
 
 ```
 [ Gross sAVAX Staking Cash Flow: ~9.0% - 11.0% ]
